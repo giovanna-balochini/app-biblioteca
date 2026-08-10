@@ -24,6 +24,7 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
   bool _buscandoCapa = false;
   String? _capaUrl;
   String? _tituloDaCapa;
+  bool _jaAvisouLimiteDesc = false;
 
   void _mostrarMensagem(String mensagem) {
     ScaffoldMessenger.of(
@@ -313,8 +314,18 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _descricaoController,
-                      decoration: const InputDecoration(labelText: 'Descrição'),
+                      maxLength: 500,
                       maxLines: 4,
+                      decoration: const InputDecoration(labelText: 'Descrição'),
+                      onChanged: (valor) {
+                        if (valor.length >= 500 && !_jaAvisouLimiteDesc) {
+                          _jaAvisouLimiteDesc = true;
+                          _mostrarMensagem('Limite de caracteres atingido.');
+                        }
+                        if (valor.length < 495) {
+                          _jaAvisouLimiteDesc = false;
+                        }
+                      },
                     ),                    
                     const SizedBox(height: 24),
                     SizedBox(

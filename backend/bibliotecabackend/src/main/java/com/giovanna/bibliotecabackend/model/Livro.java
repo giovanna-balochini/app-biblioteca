@@ -16,7 +16,7 @@ public class Livro {
     private String autor;
     private String editora;
     private String genero;
-    @Column(columnDefinition = "TEXT")
+    @Column(length = 500)
     private String descricao;
     private String imagem;
     private boolean lido;
