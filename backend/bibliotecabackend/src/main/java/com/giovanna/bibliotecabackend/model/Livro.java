@@ -21,5 +21,6 @@ public class Livro {
     private String imagem;
     private boolean lido;
     private Integer avaliacao; // 1 a 5 estrelas
+    private String dataConclusao; // Formato ISO: yyyy-MM-dd (ex: 2026-08-11)
     
 }

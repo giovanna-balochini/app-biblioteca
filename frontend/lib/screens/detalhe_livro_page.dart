@@ -23,12 +23,59 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
   bool _salvando = false;
   late bool _lido;
   late int? _avaliacao;
+  late DateTime? _dataConclusao;
   bool _jaAvisouLimiteDesc = false;
 
   void _mostrarMensagem(String mensagem) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(mensagem)),
     );
+  }
+
+  String _formatarData(DateTime? data) {
+    if (data == null) return '';
+    final dia = data.day.toString().padLeft(2, '0');
+    final mes = data.month.toString().padLeft(2, '0');
+    final ano = data.year.toString();
+    return '$dia/$mes/$ano';
+  }
+
+  String _formatarDataISO(DateTime? data) {
+    if (data == null) return '';
+    final dia = data.day.toString().padLeft(2, '0');
+    final mes = data.month.toString().padLeft(2, '0');
+    final ano = data.year.toString();
+    return '$ano-$mes-$dia';
+  }
+
+  DateTime? _parseDataISO(String? dataStr) {
+    if (dataStr == null || dataStr.trim().isEmpty) return null;
+    try {
+      final partes = dataStr.trim().split('-');
+      if (partes.length != 3) return null;
+      return DateTime(int.parse(partes[0]), int.parse(partes[1]), int.parse(partes[2]));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _selecionarData() async {
+    final hoje = DateTime.now();
+    final data = await showDatePicker(
+      context: context,
+      initialDate: _dataConclusao ?? hoje,
+      firstDate: DateTime(1900),
+      lastDate: hoje,
+      locale: const Locale('pt', 'BR'),
+      confirmText: 'Confirmar',
+      cancelText: 'Cancelar',
+      fieldLabelText: 'Data de conclusão',
+      fieldHintText: 'dd/mm/aaaa',
+      helpText: 'Selecione a data de conclusão',
+    );
+    if (data != null) {
+      setState(() => _dataConclusao = data);
+    }
   }
 
   Widget _buildEstrelas(int? avaliacao, {double tamanho = 16, bool clicavel = false, ValueChanged<int>? aoClicar}) {
@@ -87,6 +134,7 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
     _lido = widget.livro['lido'] == true;
     final aval = widget.livro['avaliacao'];
     _avaliacao = aval is int ? aval : (aval is double ? aval.toInt() : null);
+    _dataConclusao = _parseDataISO(widget.livro['dataConclusao']?.toString());
   }
 
   void _cancelarEdicao() {
@@ -98,6 +146,7 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
     _lido = widget.livro['lido'] == true;
     final aval = widget.livro['avaliacao'];
     _avaliacao = aval is int ? aval : (aval is double ? aval.toInt() : null);
+    _dataConclusao = _parseDataISO(widget.livro['dataConclusao']?.toString());
     setState(() => _editando = false);
   }
 
@@ -113,6 +162,7 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
       'imagem': widget.livro['imagem'],
       'lido': _lido,
       'avaliacao': _avaliacao,
+      'dataConclusao': _lido && _dataConclusao != null ? _formatarDataISO(_dataConclusao) : null,
     };
 
     try {
@@ -389,6 +439,50 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
                             ],
                           ),
                         ),
+                        if (_lido && _dataConclusao != null) ...[
+                          const SizedBox(height: 12),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE8FAF0),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: const Color(0xFF4CAF50),
+                                width: 1.2,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.event_available_rounded,
+                                  color: Color(0xFF2E7D32),
+                                  size: 26,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        'Concluído em',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFF2E7D32),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        _formatarData(_dataConclusao),
+                                        style: Theme.of(context).textTheme.bodyMedium,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 20),
                         SizedBox(
                           width: double.infinity,
@@ -436,35 +530,77 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
                           },
                         ),
                         const SizedBox(height: 16),
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF8F5FF),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.menu_book_outlined, color: Color(0xFF7C4DFF)),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  'Livro lido',
-                                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                        fontWeight: FontWeight.w600,
-                                        color: const Color(0xFF2A2A38),
-                                      ),
+                        GestureDetector(
+                          onTap: () => setState(() => _lido = !_lido),
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: _lido ? const Color(0xFFE8FAF0) : const Color(0xFFF8F5FF),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: _lido ? const Color(0xFF4CAF50) : Colors.transparent,
+                                width: 1.2,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  _lido ? Icons.check_circle : Icons.menu_book_outlined,
+                                  color: _lido ? const Color(0xFF2E7D32) : const Color(0xFF7C4DFF),
+                                  size: 26,
                                 ),
-                              ),
-                              Switch(
-                                value: _lido,
-                                onChanged: (valor) => setState(() => _lido = valor),
-                                activeColor: const Color(0xFF4CAF50),
-                              ),
-                            ],
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        _lido ? 'Livro lido' : 'Ainda não lido',
+                                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                              fontWeight: FontWeight.w600,
+                                              color: _lido ? const Color(0xFF2E7D32) : const Color(0xFF2A2A38),
+                                            ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        'Clique para alternar.',
+                                        style: Theme.of(context).textTheme.bodyMedium,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Switch(
+                                  value: _lido,
+                                  onChanged: (valor) => setState(() => _lido = valor),
+                                  activeColor: const Color(0xFF4CAF50),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                         const SizedBox(height: 16),
+                        if (_lido) ...[
+                          TextFormField(
+                            readOnly: true,
+                            controller: TextEditingController(text: _formatarData(_dataConclusao)),
+                            onTap: _selecionarData,
+                            decoration: InputDecoration(
+                              labelText: 'Data de conclusão da leitura',
+                              prefixIcon: const Icon(Icons.calendar_today_rounded, color: Color(0xFF7C4DFF)),
+                              suffixIcon: _dataConclusao != null
+                                  ? IconButton(
+                                      icon: const Icon(Icons.close, color: Color(0xFF7C4DFF)),
+                                      onPressed: () => setState(() => _dataConclusao = null),
+                                      tooltip: 'Limpar data',
+                                    )
+                                  : null,
+                              hintText: 'Clique para selecionar',
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                        ],
                         Container(
                           width: double.infinity,
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
@@ -506,9 +642,15 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
                                 child: Text(
                                   _avaliacao == null || _avaliacao == 0
                                       ? 'Toque em uma estrela para avaliar (1 a 5).'
-                                      : _avaliacao == 5
-                                          ? '5 estrelas! Livro incrível 😍'
-                                          : 'Você deu $_avaliacao estrela${_avaliacao == 1 ? '' : 's'}. Toque de novo para limpar.',
+                                      : _avaliacao == 1
+                                          ? '1 estrela. Não gostei muito. 😕'
+                                          : _avaliacao == 2
+                                              ? '2 estrelas. Deixa a desejar. 🫤'
+                                              : _avaliacao == 3
+                                                  ? '3 estrelas. Leitura mediana. 🙂'
+                                                  : _avaliacao == 4
+                                                      ? '4 estrelas! Muito bom! 🥰'
+                                                      : '5 estrelas! Livro incrível! 😍',
                                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                         color: const Color(0xFF6B6B80),
                                       ),
