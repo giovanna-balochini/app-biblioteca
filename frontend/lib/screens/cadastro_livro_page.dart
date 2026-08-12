@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:image_picker/image_picker.dart';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:frontend/services/google_books_service.dart';
 
 class CadastroLivroPage extends StatefulWidget {
@@ -28,6 +30,9 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
   bool _lido = false;
   int? _avaliacao;
   DateTime? _dataConclusao;
+  Uint8List? _capaBytes;
+  String? _tipoCapa; // 'url' ou 'bytes'
+  final ImagePicker _imagePicker = ImagePicker();
 
   void _mostrarMensagem(String mensagem) {
     ScaffoldMessenger.of(
@@ -137,6 +142,10 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
       _capaUrl = capa;
       _tituloDaCapa = capa != null ? _tituloController.text.trim() : null;
       _buscandoCapa = false;
+      if (capa != null) {
+        _capaBytes = null;
+        _tipoCapa = 'url';
+      }
     });
 
     if (!mounted) return;
@@ -146,10 +155,181 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
     }
   }
 
+  Future<void> _selecionarDaGaleria() async {
+    try {
+      final XFile? imagem = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+      );
+      if (imagem != null) {
+        final bytes = await imagem.readAsBytes();
+        if (!mounted) return;
+        setState(() {
+          _capaBytes = bytes;
+          _capaUrl = null;
+          _tituloDaCapa = null;
+          _tipoCapa = 'bytes';
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      _mostrarMensagem('Nao foi possivel selecionar a imagem.');
+    }
+  }
+
+  Future<void> _tirarFotoComCamera() async {
+    try {
+      final XFile? imagem = await _imagePicker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 85,
+        preferredCameraDevice: CameraDevice.rear,
+      );
+      if (imagem != null) {
+        final bytes = await imagem.readAsBytes();
+        if (!mounted) return;
+        setState(() {
+          _capaBytes = bytes;
+          _capaUrl = null;
+          _tituloDaCapa = null;
+          _tipoCapa = 'bytes';
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      _mostrarMensagem('Nao foi possivel tirar a foto.');
+    }
+  }
+
+  void _removerCapa() {
+    setState(() {
+      _capaUrl = null;
+      _capaBytes = null;
+      _tituloDaCapa = null;
+      _tipoCapa = null;
+    });
+  }
+
+  Future<void> _abrirDialogBuscarCapa() async {
+    final buscaController = TextEditingController(text: _tituloController.text.trim());
+    final formKey = GlobalKey<FormState>();
+    bool buscandoInterno = false;
+
+    final resultado = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctxDialog) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            return AlertDialog(
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              title: const Text('Buscar capa do livro'),
+              content: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      'Digite o título para procurar a capa do livro.',
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: buscaController,
+                      autofocus: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Título do livro',
+                        prefixIcon: Icon(Icons.search_rounded),
+                      ),
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty) {
+                          return 'Digite um título para buscar';
+                        }
+                        return null;
+                      },
+                      onFieldSubmitted: (_) async {
+                        if (!formKey.currentState!.validate()) return;
+                        setDialogState(() => buscandoInterno = true);
+                        final capa = await GoogleBooksService.buscarCapa(buscaController.text);
+                        if (!mounted) return;
+                        setDialogState(() => buscandoInterno = false);
+                        setState(() {
+                          _capaUrl = capa;
+                          _capaBytes = null;
+                          _tituloDaCapa = capa != null ? buscaController.text.trim() : null;
+                          _tipoCapa = capa != null ? 'url' : null;
+                        });
+                        Navigator.of(ctxDialog).pop(capa != null);
+                      },
+                    ),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      height: 52,
+                      child: ElevatedButton.icon(
+                        onPressed: buscandoInterno
+                            ? null
+                            : () async {
+                                if (!formKey.currentState!.validate()) return;
+                                setDialogState(() => buscandoInterno = true);
+                                final capa = await GoogleBooksService.buscarCapa(buscaController.text);
+                                if (!mounted) return;
+                                setDialogState(() => buscandoInterno = false);
+                                setState(() {
+                                  _capaUrl = capa;
+                                  _capaBytes = null;
+                                  _tituloDaCapa = capa != null ? buscaController.text.trim() : null;
+                                  _tipoCapa = capa != null ? 'url' : null;
+                                });
+                                Navigator.of(ctxDialog).pop(capa != null);
+                              },
+                        style: ElevatedButton.styleFrom(
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        ),
+                        icon: buscandoInterno
+                            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            : const Icon(Icons.search_rounded, size: 18),
+                        label: Text(buscandoInterno ? 'Buscando...' : 'Buscar', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      height: 52,
+                      child: OutlinedButton.icon(
+                        onPressed: buscandoInterno ? null : () => Navigator.of(ctxDialog).pop(false),
+                        style: OutlinedButton.styleFrom(
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        ),
+                        icon: const Icon(Icons.close_rounded, size: 18),
+                        label: const Text('Cancelar', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (resultado == true) {
+      _mostrarMensagem('Capa encontrada!');
+    } else if (resultado == false) {
+      _mostrarMensagem('Nenhuma capa foi encontrada para esse título.');
+    }
+  }
+
   Future<void> _salvarLivro() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _salvando = true);
+
+    String? imagemParaSalvar;
+    if (_tipoCapa == 'bytes' && _capaBytes != null) {
+      imagemParaSalvar = base64Encode(_capaBytes!);
+    } else if (_tipoCapa == 'url' && _capaUrl != null) {
+      imagemParaSalvar = _capaUrl;
+    }
 
     final livro = {
       'titulo': _tituloController.text.trim(),
@@ -157,7 +337,7 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
       'editora': _editoraController.text.trim(),
       'genero': _generoController.text.trim(),
       'descricao': _descricaoController.text.trim(),
-      'imagem': _capaUrl,
+      'imagem': imagemParaSalvar,
       'lido': _lido,
       'avaliacao': _avaliacao,
       'dataConclusao': _lido && _dataConclusao != null ? _formatarDataISO(_dataConclusao) : null,
@@ -240,7 +420,16 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
                         padding: EdgeInsets.symmetric(vertical: 32),
                         child: CircularProgressIndicator(),
                       )
-                    else if (_capaUrl != null)
+                    else if (_tipoCapa == 'bytes' && _capaBytes != null)
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: Image.memory(
+                          _capaBytes!,
+                          height: 200,
+                          fit: BoxFit.cover,
+                        ),
+                      )
+                    else if (_tipoCapa == 'url' && _capaUrl != null)
                       ClipRRect(
                         borderRadius: BorderRadius.circular(16),
                         child: CachedNetworkImage(
@@ -281,12 +470,20 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
-                                color: Color(0xFF5F5F7A)
-                              )
-                            )
-                          ]
+                                color: Color(0xFF5F5F7A),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
+                    if (_tipoCapa != null) ...[
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(
+                        onPressed: _removerCapa,
+                        icon: const Icon(Icons.close_rounded, size: 18),
+                        label: const Text('Remover capa'),
+                      ),
+                    ],
                     const SizedBox(height: 16),
                     Text(
                       'Capa do livro',
@@ -294,9 +491,49 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Pesquise pelo título para encontrar a capa do seu livro.',
+                      'Escolha a capa: tire uma foto, selecione da galeria ou busque pelo título.',
                       style: Theme.of(context).textTheme.bodyMedium,
                       textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _tirarFotoComCamera,
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
+                              textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                            ),
+                            icon: const Icon(Icons.photo_camera_rounded, size: 16),
+                            label: const Text('Câmera'),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _selecionarDaGaleria,
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
+                              textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                            ),
+                            icon: const Icon(Icons.photo_library_rounded, size: 16),
+                            label: const Text('Galeria'),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _abrirDialogBuscarCapa,
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
+                              textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                            ),
+                            icon: const Icon(Icons.search_rounded, size: 16),
+                            label: const Text('Buscar'),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -324,45 +561,26 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                     const SizedBox(height: 20),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Expanded(
-                          child: TextFormField(
-                            controller: _tituloController,
-                            decoration: const InputDecoration(
-                              labelText: 'Título *',
-                              hintText: 'Digite o nome do livro',
-                            ),
-                            validator: (v) =>
-                                v!.isEmpty ? 'Informe o título' : null,
-                            onChanged: (value) {
-                              final tituloAtual = value.trim();
-                              if (_capaUrl != null &&
-                                  tituloAtual != _tituloDaCapa) {
-                                setState(() {
-                                  _capaUrl = null;
-                                  _tituloDaCapa = null;
-                                });
-                              }
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Container(
-                          height: 56,
-                          width: 56,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF1EEFF),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: IconButton(
-                            icon: const Icon(Icons.search_rounded, color: Color(0xFF7C4DFF)),
-                            tooltip: 'Buscar capa',
-                            onPressed: _buscarCapa,
-                          ),
-                        ),
-                      ],
+                    TextFormField(
+                      controller: _tituloController,
+                      decoration: const InputDecoration(
+                        labelText: 'Título *',
+                        hintText: 'Digite o nome do livro',
+                      ),
+                      validator: (v) =>
+                          v!.isEmpty ? 'Informe o título' : null,
+                      onChanged: (value) {
+                        final tituloAtual = value.trim();
+                        if ((_capaUrl != null || _capaBytes != null) &&
+                            tituloAtual != _tituloDaCapa) {
+                          setState(() {
+                            _capaUrl = null;
+                            _capaBytes = null;
+                            _tipoCapa = null;
+                            _tituloDaCapa = null;
+                          });
+                        }
+                      },
                     ),
                     const SizedBox(height: 12),
                     TextFormField(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:convert';
+import 'dart:typed_data';
 
 class DetalheLivroPage extends StatefulWidget {
   final Map<String, dynamic> livro;
@@ -266,53 +267,107 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
                   children: [
                     if (widget.livro['imagem'] != null && 
                         widget.livro['imagem'].toString().isNotEmpty)
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: CachedNetworkImage(
-                          imageUrl: widget.livro['imagem'].toString(),
-                          height: 220,
-                          fit: BoxFit.cover,
-                          placeholder: (context, url) => const SizedBox(
-                            height: 220, 
-                            child: Center(child: CircularProgressIndicator()),
-                          ),
-                          errorWidget: (context, url, error) => Container(
-                            height: 220, 
-                            width: 150,
-                            color: Colors.grey.shade300,
-                            alignment: Alignment.center,
-                            child: const Icon(Icons.broken_image, size: 40),
-                            ),
-                          ),       
-                        )
-                      else
-                        Container(
-                          height: 220,
-                          width: 150,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF1EEFF),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: const Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.menu_book_rounded,
-                                size: 52,
-                                color: Color(0xFF7C4DFF),
-                              ),
-                              SizedBox(height: 12),
-                              Text(
-                                'Sem capa',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF5F5F7A),
+                      () {
+                        final imagemStr = widget.livro['imagem'].toString();
+                        final ehBase64 = imagemStr.startsWith('data:image') || imagemStr.length > 1000;
+                        Widget capaOk;
+                        if (ehBase64) {
+                          try {
+                            Uint8List bytes;
+                            if (imagemStr.startsWith('data:image')) {
+                              final commaIdx = imagemStr.indexOf(',');
+                              final b64 = commaIdx != -1 ? imagemStr.substring(commaIdx + 1) : imagemStr;
+                              bytes = base64Decode(b64);
+                            } else {
+                              bytes = base64Decode(imagemStr);
+                            }
+                            capaOk = ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: Image.memory(
+                                bytes,
+                                height: 220,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Container(
+                                  height: 220,
+                                  width: 150,
+                                  color: const Color(0xFFF1EEFF),
+                                  alignment: Alignment.center,
+                                  child: const Icon(Icons.broken_image, size: 40),
                                 ),
                               ),
-                            ],
-                          ),
-                        ), 
+                            );
+                          } catch (_) {
+                            capaOk = Container(
+                              height: 220,
+                              width: 150,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF1EEFF),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: const Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.menu_book_rounded, size: 52, color: Color(0xFF7C4DFF)),
+                                  SizedBox(height: 12),
+                                  Text(
+                                    'Sem capa',
+                                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF5F5F7A)),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }
+                        } else {
+                          capaOk = ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: CachedNetworkImage(
+                              imageUrl: imagemStr,
+                              height: 220,
+                              fit: BoxFit.cover,
+                              placeholder: (context, url) => const SizedBox(
+                                height: 220,
+                                child: Center(child: CircularProgressIndicator()),
+                              ),
+                              errorWidget: (context, url, error) => Container(
+                                height: 220,
+                                width: 150,
+                                color: Colors.grey.shade300,
+                                alignment: Alignment.center,
+                                child: const Icon(Icons.broken_image, size: 40),
+                              ),
+                            ),
+                          );
+                        }
+                        return capaOk;
+                      }()
+                    else
+                      Container(
+                        height: 220,
+                        width: 150,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF1EEFF),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: const Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.menu_book_rounded,
+                              size: 52,
+                              color: Color(0xFF7C4DFF),
+                            ),
+                            SizedBox(height: 12),
+                            Text(
+                              'Sem capa',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF5F5F7A),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                       const SizedBox(height: 16),
                       Text(
                         widget.livro['titulo'] ?? 'Livro sem título',

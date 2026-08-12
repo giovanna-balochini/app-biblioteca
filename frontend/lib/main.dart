@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:http/http.dart' as http;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'dart:math' as math;
 import 'screens/cadastro_livro_page.dart';
 import 'screens/detalhe_livro_page.dart';
@@ -162,27 +163,49 @@ class _ListaLivrosPageState extends State<ListaLivrosPage> {
           ),
         );
 
-    Widget capaComImagem() => ClipRRect(
-          borderRadius: BorderRadius.circular(10),
-          child: CachedNetworkImage(
-            imageUrl: imagem.toString(),
+    Widget capaComImagem() {
+      final imagemStr = imagem.toString();
+      final ehBase64 = imagemStr.startsWith('data:image') || imagemStr.length > 1000;
+      if (ehBase64) {
+        try {
+          Uint8List bytes;
+          if (imagemStr.startsWith('data:image')) {
+            final commaIdx = imagemStr.indexOf(',');
+            final base64Str = commaIdx != -1 ? imagemStr.substring(commaIdx + 1) : imagemStr;
+            bytes = base64Decode(base64Str);
+          } else {
+            bytes = base64Decode(imagemStr);
+          }
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: Image.memory(
+              bytes,
+              width: 56,
+              height: 82,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => capaSemImagem(),
+            ),
+          );
+        } catch (_) {
+          return capaSemImagem();
+        }
+      }
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: CachedNetworkImage(
+          imageUrl: imagemStr,
+          width: 56,
+          height: 82,
+          fit: BoxFit.cover,
+          placeholder: (context, url) => const SizedBox(
             width: 56,
             height: 82,
-            fit: BoxFit.cover,
-            placeholder: (context, url) => const SizedBox(
-              width: 56,
-              height: 82,
-              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-            ),
-            errorWidget: (context, url, error) => Container(
-              width: 56,
-              height: 82,
-              color: Colors.grey.shade300,
-              alignment: Alignment.center,
-              child: const Icon(Icons.broken_image),
-            ),
+            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
           ),
-        );
+          errorWidget: (context, url, error) => capaSemImagem(),
+        ),
+      );
+    }
 
     final filhoCapa = (imagem == null || imagem.toString().isEmpty)
         ? capaSemImagem()
@@ -260,6 +283,19 @@ class _ListaLivrosPageState extends State<ListaLivrosPage> {
     );
   }
 
+  String _formatarDataCurta(String? dataStr) {
+    if (dataStr == null || dataStr.trim().isEmpty) return '';
+    try {
+      final partes = dataStr.trim().split('-');
+      if (partes.length != 3) return '';
+      final dia = partes[2].padLeft(2, '0');
+      final mes = partes[1].padLeft(2, '0');
+      return '$dia/$mes';
+    } catch (_) {
+      return '';
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -296,7 +332,12 @@ class _ListaLivrosPageState extends State<ListaLivrosPage> {
       _livrosFiltrados = livros.where((livro) {
         final titulo = (livro['titulo'] ?? '').toString().toLowerCase();
         final autor = (livro['autor'] ?? '').toString().toLowerCase();
-        return titulo.contains(termo) || autor.contains(termo);
+        final editora = (livro['editora'] ?? '').toString().toLowerCase();
+        final genero = (livro['genero'] ?? '').toString().toLowerCase();
+        return titulo.contains(termo) ||
+            autor.contains(termo) ||
+            editora.contains(termo) ||
+            genero.contains(termo);
       }).toList();
     });
   }
@@ -381,7 +422,7 @@ class _ListaLivrosPageState extends State<ListaLivrosPage> {
                     onChanged: _filtrarLivros,
                     decoration: InputDecoration(
                       labelText: 'Buscar livro',
-                      hintText: 'Pesquise por título ou autor',
+                      hintText: 'Pesquise por título, autor, editora ou gênero',
                       prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF7C4DFF)),
                       suffixIcon: _buscaController.text.isNotEmpty
                           ? IconButton(
@@ -420,10 +461,29 @@ class _ListaLivrosPageState extends State<ListaLivrosPage> {
                                   Text(
                                     _buscaController.text.trim().isEmpty
                                         ? 'Sua biblioteca está vazia.'
-                                        : 'Nenhum livro encontrado para "${_buscaController.text}"',
+                                        : 'Nenhum livro encontrado para "${_buscaController.text.trim()}"',
                                     style: Theme.of(context).textTheme.bodyLarge,
                                     textAlign: TextAlign.center,
                                   ),
+                                  if (_buscaController.text.trim().isNotEmpty) ...[
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      'Tente buscar por título, autor, editora ou gênero.',
+                                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                            color: const Color(0xFF6B6B80),
+                                          ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    const SizedBox(height: 20),
+                                    OutlinedButton.icon(
+                                      onPressed: () {
+                                        _buscaController.clear();
+                                        _filtrarLivros('');
+                                      },
+                                      icon: const Icon(Icons.refresh_rounded, size: 18),
+                                      label: const Text('Limpar busca'),
+                                    ),
+                                  ],
                                 ],
                               ),
                             ),
@@ -456,6 +516,26 @@ class _ListaLivrosPageState extends State<ListaLivrosPage> {
                                             livro['avaliacao'] is int ? livro['avaliacao'] : (livro['avaliacao'] is double ? (livro['avaliacao'] as double).toInt() : null),
                                             tamanho: 15,
                                           ),
+    
+                                          if (livro['lido'] == true) ...[
+                                            if (_formatarDataCurta(livro['dataConclusao']?.toString()).isNotEmpty) ...[
+                                              const SizedBox(height: 6),
+                                              Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  const Icon(Icons.event_available_rounded, size: 12, color: Color(0xFF2E7D32)),
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    'Concluído em ${_formatarDataCurta(livro['dataConclusao']?.toString())}',
+                                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                                          color: const Color(0xFF2E7D32),
+                                                          fontWeight: FontWeight.w600,
+                                                        ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ],
+                                          ],
                                         ],
                                       ),
                                     ),
