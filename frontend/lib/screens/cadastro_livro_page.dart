@@ -379,6 +379,25 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
     super.dispose();
   }
 
+  Widget _buildTituloSecao(String texto) {
+    return ShaderMask(
+      shaderCallback: (bounds) => const LinearGradient(
+        colors: [Color(0xFF7C4DFF), Color(0xFFB28CFF)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ).createShader(bounds),
+      blendMode: BlendMode.srcIn,
+      child: Text(
+        texto,
+        style: const TextStyle(
+          fontFamily: 'Diphylleia',
+          fontSize: 24,
+          letterSpacing: 0.1,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -387,17 +406,32 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
           crossAxisAlignment:
           CrossAxisAlignment.start,
           children: [
-            Text(
-              'Cadastrar Livro',
-              style: Theme.of(context).textTheme.headlineSmall,
+            ShaderMask(
+              shaderCallback: (bounds) => const LinearGradient(
+                colors: [Color(0xFF7C4DFF), Color(0xFFB28CFF)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ).createShader(bounds),
+              blendMode: BlendMode.srcIn,
+              child: const Text(
+                'Cadastrar Livro',
+                style: TextStyle(
+                  fontFamily: 'Diphylleia',
+                  fontSize: 27,
+                  letterSpacing: 0.2,
+                ),
               ),
+            ),
+              const SizedBox(height: 4),
               Text(
                 'Adicione um novo título à sua biblioteca',
-                style: Theme.of(context).textTheme.bodyMedium,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: const Color(0xFF6B6B80),
+                    ),
               ),
           ],
         ),
-        toolbarHeight: 88,
+        toolbarHeight: 92,
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
@@ -485,10 +519,7 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
                       ),
                     ],
                     const SizedBox(height: 16),
-                    Text(
-                      'Capa do livro',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
+                    _buildTituloSecao('Capa do livro'),
                     const SizedBox(height: 6),
                     Text(
                       'Escolha a capa: tire uma foto, selecione da galeria ou busque pelo título.',
@@ -551,10 +582,7 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Informações do livro',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
+                    _buildTituloSecao('Informações do livro'),
                     const SizedBox(height: 6),
                     Text(
                       'Preencha os campos abaixo para cadastrar um novo livro.',
@@ -599,10 +627,7 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
                       decoration: const InputDecoration(labelText: 'Gênero'),
                     ),
                     const SizedBox(height: 20),
-                    Text(
-                      'Descrição do livro',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
+                    _buildTituloSecao('Descrição do livro'),
                     const SizedBox(height: 8),
                     Text(
                       'Adicione um resumo, observação ou detalhes importantes sobre o livro.',
@@ -650,13 +675,30 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    _lido ? 'Livro lido' : 'Ainda não lido',
-                                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                          fontWeight: FontWeight.w600,
-                                          color: _lido ? const Color(0xFF2E7D32) : const Color(0xFF2A2A38),
+                                  _lido
+                                      ? Text(
+                                          'Livro lido',
+                                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                                fontWeight: FontWeight.w600,
+                                                color: const Color(0xFF2E7D32),
+                                              ),
+                                        )
+                                      : ShaderMask(
+                                          shaderCallback: (bounds) => const LinearGradient(
+                                            colors: [Color(0xFF7C4DFF), Color(0xFFB28CFF)],
+                                            begin: Alignment.topLeft,
+                                            end: Alignment.bottomRight,
+                                          ).createShader(bounds),
+                                          blendMode: BlendMode.srcIn,
+                                          child: Text(
+                                            'Ainda não lido',
+                                            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                                  fontWeight: FontWeight.w700,
+                                                  fontSize: 17,
+                                                  color: Colors.white,
+                                                ),
+                                          ),
                                         ),
-                                  ),
                                   const SizedBox(height: 2),
                                   Text(
                                     'Clique para alternar.',
@@ -708,15 +750,32 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
                         children: [
                           Row(
                             children: [
-                              const Icon(Icons.star_rate_rounded, color: Color(0xFF7C4DFF)),
+                              ShaderMask(
+                                shaderCallback: (bounds) => const LinearGradient(
+                                  colors: [Color(0xFF7C4DFF), Color(0xFFB28CFF)],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ).createShader(bounds),
+                                blendMode: BlendMode.srcIn,
+                                child: const Icon(Icons.star_rate_rounded, color: Colors.white, size: 28),
+                              ),
                               const SizedBox(width: 12),
                               Expanded(
-                                child: Text(
-                                  'Sua avaliação',
-                                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                        fontWeight: FontWeight.w600,
-                                        color: const Color(0xFF2A2A38),
-                                      ),
+                                child: ShaderMask(
+                                  shaderCallback: (bounds) => const LinearGradient(
+                                    colors: [Color(0xFF7C4DFF), Color(0xFFB28CFF)],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ).createShader(bounds),
+                                  blendMode: BlendMode.srcIn,
+                                  child: Text(
+                                    'Sua avaliação',
+                                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 18,
+                                          color: Colors.white,
+                                        ),
+                                  ),
                                 ),
                               ),
                             ],

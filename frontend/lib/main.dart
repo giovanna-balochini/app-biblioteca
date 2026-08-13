@@ -533,17 +533,54 @@ class _ListaLivrosPageState extends State<ListaLivrosPage> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Minha Biblioteca',
-              style: Theme.of(context).textTheme.headlineSmall,
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Image.asset(
+                  'assets/images/logo_minha_biblioteca.png',
+                  height: 36,
+                  width: 36,
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, err, stack) => Container(
+                    height: 36,
+                    width: 36,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1EEFF),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.menu_book_rounded, color: Color(0xFF7C4DFF)),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                ShaderMask(
+                  shaderCallback: (bounds) => const LinearGradient(
+                    colors: [Color(0xFF7C4DFF), Color(0xFFB28CFF)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ).createShader(bounds),
+                  blendMode: BlendMode.srcIn,
+                  child: const Text(
+                    'Minha Biblioteca',
+                    style: TextStyle(
+                      fontFamily: 'Diphylleia',
+                      fontSize: 27,
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                ),
+              ],
             ),
+            const SizedBox(height: 4),
             Text(
               '${livros.length} ${livros.length == 1 ? 'livro cadastrado' : 'livros cadastrados'}',
-              style: Theme.of(context).textTheme.bodyMedium,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: const Color(0xFF6B6B80),
+                    fontWeight: FontWeight.w500,
+                  ),
             ),
           ],
         ),
-        toolbarHeight: 80,
+        toolbarHeight: 92,
       ),
       body:carregando
         ? const Center(child: CircularProgressIndicator())

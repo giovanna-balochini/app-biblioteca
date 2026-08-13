@@ -460,7 +460,23 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
     Widget build(BuildContext context) {
       return Scaffold(
         appBar: AppBar(
-          title: Text(_editando ? 'Editar Livro' : 'Detalhes'),
+          title: ShaderMask(
+            shaderCallback: (bounds) => const LinearGradient(
+              colors: [Color(0xFF7C4DFF), Color(0xFFB28CFF)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ).createShader(bounds),
+            blendMode: BlendMode.srcIn,
+            child: Text(
+              _editando ? 'Editar Livro' : 'Detalhes',
+              style: const TextStyle(
+                fontFamily: 'Diphylleia',
+                fontSize: 30,
+                letterSpacing: 0.2,
+                color: Colors.white,
+              ),
+            ),
+          ),
           backgroundColor: Theme.of(context).colorScheme.inversePrimary,
           actions: [
             if (!_editando)
