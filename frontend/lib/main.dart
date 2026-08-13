@@ -143,6 +143,7 @@ class _ListaLivrosPageState extends State<ListaLivrosPage> {
   bool carregando = true;
   final _buscaController = TextEditingController();
   List<dynamic> _livrosFiltrados = [];
+  String _filtroStatus = 'todos'; // 'todos' | 'lidos' | 'nao_lidos'
 
   Widget _buildCapaLivro(dynamic livro) {
     final imagem = livro['imagem'];
@@ -316,30 +317,213 @@ class _ListaLivrosPageState extends State<ListaLivrosPage> {
     if (response.statusCode == 200) {
       setState(() {
         livros = json.decode(response.body);
-        _livrosFiltrados = livros;
         carregando = false;
       });
+      _aplicarFiltros();
     }
+  }
+
+  void _aplicarFiltros() {
+    _filtrarLivros(_buscaController.text);
   }
 
   void _filtrarLivros(String busca) {
     setState(() {
-      if (busca.trim().isEmpty) {
-        _livrosFiltrados = livros;
-        return;
-      }
       final termo = busca.trim().toLowerCase();
-      _livrosFiltrados = livros.where((livro) {
-        final titulo = (livro['titulo'] ?? '').toString().toLowerCase();
-        final autor = (livro['autor'] ?? '').toString().toLowerCase();
-        final editora = (livro['editora'] ?? '').toString().toLowerCase();
-        final genero = (livro['genero'] ?? '').toString().toLowerCase();
-        return titulo.contains(termo) ||
-            autor.contains(termo) ||
-            editora.contains(termo) ||
-            genero.contains(termo);
-      }).toList();
+
+      // Passo 1: filtro por TEXTO (busca)
+      Iterable<dynamic> resultado = livros;
+      if (termo.isNotEmpty) {
+        resultado = resultado.where((livro) {
+          final titulo = (livro['titulo'] ?? '').toString().toLowerCase();
+          final autor = (livro['autor'] ?? '').toString().toLowerCase();
+          final editora = (livro['editora'] ?? '').toString().toLowerCase();
+          final genero = (livro['genero'] ?? '').toString().toLowerCase();
+          return titulo.contains(termo) ||
+              autor.contains(termo) ||
+              editora.contains(termo) ||
+              genero.contains(termo);
+        });
+      }
+
+      // Passo 2: filtro por STATUS (lidos / não lidos)
+      if (_filtroStatus == 'lidos') {
+        resultado = resultado.where((livro) => livro['lido'] == true);
+      } else if (_filtroStatus == 'nao_lidos') {
+        resultado = resultado.where((livro) => livro['lido'] != true);
+      }
+
+      _livrosFiltrados = resultado.toList();
     });
+  }
+
+  Widget _buildCardEstatisticas() {
+    final total = livros.length;
+    final totalLidos = livros.where((l) => l['lido'] == true).length;
+    final porcentagem = total == 0 ? 0.0 : (totalLidos / total).clamp(0.0, 1.0);
+    final porcentagemTexto = total == 0 ? '0%' : '${(porcentagem * 100).toStringAsFixed(0)}%';
+    final completo = porcentagem >= 1.0 && total > 0;
+    final corConcluido = completo ? const Color(0xFF2E7D32) : const Color(0xFF7C4DFF);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: const [
+              Icon(Icons.insights_rounded, size: 18, color: Color(0xFF7C4DFF)),
+              SizedBox(width: 6),
+              Text(
+                'Sua leitura em números',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF2A2A38)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8F5FF),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Column(
+                    children: [
+                      const Icon(Icons.library_books_rounded, size: 18, color: Color(0xFF7C4DFF)),
+                      const SizedBox(height: 4),
+                      Text(
+                        '$total',
+                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Color(0xFF2A2A38)),
+                      ),
+                      const SizedBox(height: 1),
+                      Text(
+                        total == 1 ? 'livro cadastrado' : 'livros cadastrados',
+                        style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w500, color: Color(0xFF6B6B80)),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE8FAF0),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Column(
+                    children: [
+                      const Icon(Icons.check_circle_rounded, size: 18, color: Color(0xFF2E7D32)),
+                      const SizedBox(height: 4),
+                      Text(
+                        '$totalLidos',
+                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Color(0xFF2A2A38)),
+                      ),
+                      const SizedBox(height: 1),
+                      Text(
+                        totalLidos == 1 ? 'livro lido' : 'livros lidos',
+                        style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w500, color: Color(0xFF6B6B80)),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Progresso de leitura',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF2A2A38),
+                    ),
+              ),
+              Text(
+                '$porcentagemTexto concluída',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: corConcluido,
+                    ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              value: porcentagem,
+              minHeight: 6,
+              backgroundColor: const Color(0xFFEDE7FF),
+              valueColor: AlwaysStoppedAnimation<Color>(
+                completo ? const Color(0xFF2E7D32) : const Color(0xFF7C4DFF),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  bool _temFiltroAplicado() {
+    return _buscaController.text.trim().isNotEmpty || _filtroStatus != 'todos';
+  }
+
+  String _mensagemEstadoVazio() {
+    final buscaVazia = _buscaController.text.trim().isEmpty;
+
+    if (buscaVazia && _filtroStatus == 'todos') {
+      return 'Sua biblioteca está vazia.';
+    }
+    if (buscaVazia && _filtroStatus == 'lidos') {
+      return 'Você ainda não marcou nenhum livro como lido.';
+    }
+    if (buscaVazia && _filtroStatus == 'nao_lidos') {
+      return 'Parabéns! Você já leu todos os seus livros 📚🎉';
+    }
+
+    // Busca com texto (preenchido) - combina com status
+    final termo = _buscaController.text.trim();
+    if (_filtroStatus == 'lidos') {
+      return 'Nenhum livro LIDO encontrado para "$termo".';
+    }
+    if (_filtroStatus == 'nao_lidos') {
+      return 'Nenhum livro NÃO LIDO encontrado para "$termo".';
+    }
+    return 'Nenhum livro encontrado para "$termo".';
+  }
+
+  String _subtituloEstadoVazio() {
+    final buscaVazia = _buscaController.text.trim().isEmpty;
+
+    if (buscaVazia && _filtroStatus == 'lidos') {
+      return 'Comece marcando alguns livros como lidos e eles aparecerão aqui.';
+    }
+    if (buscaVazia && _filtroStatus == 'nao_lidos') {
+      return 'Você não tem livros pendentes para ler.';
+    }
+
+    return 'Tente buscar por título, autor, editora ou gênero.';
   }
 
   @override
@@ -413,158 +597,242 @@ class _ListaLivrosPageState extends State<ListaLivrosPage> {
               ),
             )
           : Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  const SizedBox(height: 4),
-                  TextField(
-                    controller: _buscaController,
-                    onChanged: _filtrarLivros,
-                    decoration: InputDecoration(
-                      labelText: 'Buscar livro',
-                      hintText: 'Pesquise por título, autor, editora ou gênero',
-                      prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF7C4DFF)),
-                      suffixIcon: _buscaController.text.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.close, color: Color(0xFF7C4DFF)),
-                              onPressed: () {
-                                _buscaController.clear();
-                                _filtrarLivros('');
-                              },
-                            )
-                          : null,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: CustomScrollView(
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: Column(
+                      children: [
+                        const SizedBox(height: 16),
+                        _buildCardEstatisticas(),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _buscaController,
+                          onChanged: _filtrarLivros,
+                          decoration: InputDecoration(
+                            labelText: 'Buscar livro',
+                            hintText: 'Pesquise por título, autor, editora ou gênero',
+                            prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF7C4DFF)),
+                            suffixIcon: _buscaController.text.isNotEmpty
+                                ? IconButton(
+                                    icon: const Icon(Icons.close, color: Color(0xFF7C4DFF)),
+                                    onPressed: () {
+                                      _buscaController.clear();
+                                      _aplicarFiltros();
+                                    },
+                                  )
+                                : null,
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              ChoiceChip(
+                                label: const Text('Todos'),
+                                selected: _filtroStatus == 'todos',
+                                onSelected: (_) {
+                                  setState(() => _filtroStatus = 'todos');
+                                  _aplicarFiltros();
+                                },
+                                selectedColor: const Color(0xFF7C4DFF),
+                                backgroundColor: Colors.white,
+                                labelStyle: TextStyle(
+                                  color: _filtroStatus == 'todos' ? Colors.white : const Color(0xFF5F5F7A),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                side: const BorderSide(color: Color(0xFFE0DBF2)),
+                                avatar: Icon(
+                                  Icons.library_books_rounded,
+                                  size: 18,
+                                  color: _filtroStatus == 'todos' ? Colors.white : const Color(0xFF7C4DFF),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              ChoiceChip(
+                                label: const Text('Lidos'),
+                                selected: _filtroStatus == 'lidos',
+                                onSelected: (_) {
+                                  setState(() => _filtroStatus = 'lidos');
+                                  _aplicarFiltros();
+                                },
+                                selectedColor: const Color(0xFF2E7D32),
+                                backgroundColor: Colors.white,
+                                labelStyle: TextStyle(
+                                  color: _filtroStatus == 'lidos' ? Colors.white : const Color(0xFF5F5F7A),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                side: const BorderSide(color: Color(0xFFD7EBDB)),
+                                avatar: Icon(
+                                  Icons.check_circle_rounded,
+                                  size: 18,
+                                  color: _filtroStatus == 'lidos' ? Colors.white : const Color(0xFF2E7D32),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              ChoiceChip(
+                                label: const Text('Não lidos'),
+                                selected: _filtroStatus == 'nao_lidos',
+                                onSelected: (_) {
+                                  setState(() => _filtroStatus = 'nao_lidos');
+                                  _aplicarFiltros();
+                                },
+                                selectedColor: const Color(0xFF7C4DFF),
+                                backgroundColor: Colors.white,
+                                labelStyle: TextStyle(
+                                  color: _filtroStatus == 'nao_lidos' ? Colors.white : const Color(0xFF5F5F7A),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                side: const BorderSide(color: Color(0xFFE0DBF2)),
+                                avatar: Icon(
+                                  Icons.menu_book_outlined,
+                                  size: 18,
+                                  color: _filtroStatus == 'nao_lidos' ? Colors.white : const Color(0xFF7C4DFF),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  Expanded(
-                    child: _livrosFiltrados.isEmpty
-                        ? Center(
-                            child: Padding(
-                              padding: const EdgeInsets.all(24),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Container(
-                                    width: 96,
-                                    height: 96,
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(24),
-                                      color: const Color(0xFFEDE7FF),
-                                    ),
-                                    child: const Icon(
-                                      Icons.search_off_rounded,
-                                      size: 44,
-                                      color: Color(0xFF7C4DFF),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 24),
-                                  Text(
-                                    _buscaController.text.trim().isEmpty
-                                        ? 'Sua biblioteca está vazia.'
-                                        : 'Nenhum livro encontrado para "${_buscaController.text.trim()}"',
-                                    style: Theme.of(context).textTheme.bodyLarge,
-                                    textAlign: TextAlign.center,
-                                  ),
-                                  if (_buscaController.text.trim().isNotEmpty) ...[
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      'Tente buscar por título, autor, editora ou gênero.',
-                                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                            color: const Color(0xFF6B6B80),
-                                          ),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                    const SizedBox(height: 20),
-                                    OutlinedButton.icon(
-                                      onPressed: () {
-                                        _buscaController.clear();
-                                        _filtrarLivros('');
-                                      },
-                                      icon: const Icon(Icons.refresh_rounded, size: 18),
-                                      label: const Text('Limpar busca'),
-                                    ),
-                                  ],
-                                ],
+                  if (_livrosFiltrados.isEmpty)
+                    SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                width: 96,
+                                height: 96,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(24),
+                                  color: const Color(0xFFEDE7FF),
+                                ),
+                                child: const Icon(
+                                  Icons.search_off_rounded,
+                                  size: 44,
+                                  color: Color(0xFF7C4DFF),
+                                ),
                               ),
-                            ),
-                          )
-                        : ListView.builder(
-                            itemCount: _livrosFiltrados.length,
-                            itemBuilder: (context, index) {
-                              final livro = _livrosFiltrados[index];
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 12),
-                                child: Card(
-                                  child: ListTile(
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                    leading: _buildCapaLivro(livro),
-                                    title: Text(
-                                      livro['titulo'] ?? '',
-                                      style: Theme.of(context).textTheme.titleLarge,
-                                    ),
-                                    subtitle: Padding(
-                                      padding: const EdgeInsets.only(top: 8),
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            livro['autor'] ?? 'Autor Desconhecido',
-                                            style: Theme.of(context).textTheme.bodyMedium,
-                                          ),
+                              const SizedBox(height: 24),
+                              Text(
+                                _mensagemEstadoVazio(),
+                                style: Theme.of(context).textTheme.bodyLarge,
+                                textAlign: TextAlign.center,
+                              ),
+                              if (_temFiltroAplicado()) ...[
+                                const SizedBox(height: 6),
+                                Text(
+                                  _subtituloEstadoVazio(),
+                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                        color: const Color(0xFF6B6B80),
+                                      ),
+                                  textAlign: TextAlign.center,
+                                ),
+                                const SizedBox(height: 20),
+                                OutlinedButton.icon(
+                                  onPressed: () {
+                                    _buscaController.clear();
+                                    setState(() => _filtroStatus = 'todos');
+                                    _aplicarFiltros();
+                                  },
+                                  icon: const Icon(Icons.refresh_rounded, size: 18),
+                                  label: const Text('Limpar filtros'),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                          final livro = _livrosFiltrados[index];
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: Card(
+                              child: ListTile(
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                leading: _buildCapaLivro(livro),
+                                title: Text(
+                                  livro['titulo'] ?? '',
+                                  style: Theme.of(context).textTheme.titleLarge,
+                                ),
+                                subtitle: Padding(
+                                  padding: const EdgeInsets.only(top: 8),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        livro['autor'] ?? 'Autor Desconhecido',
+                                        style: Theme.of(context).textTheme.bodyMedium,
+                                      ),
+                                      const SizedBox(height: 6),
+                                      _buildEstrelas(
+                                        livro['avaliacao'] is int ? livro['avaliacao'] : (livro['avaliacao'] is double ? (livro['avaliacao'] as double).toInt() : null),
+                                        tamanho: 15,
+                                      ),
+
+                                      if (livro['lido'] == true) ...[
+                                        if (_formatarDataCurta(livro['dataConclusao']?.toString()).isNotEmpty) ...[
                                           const SizedBox(height: 6),
-                                          _buildEstrelas(
-                                            livro['avaliacao'] is int ? livro['avaliacao'] : (livro['avaliacao'] is double ? (livro['avaliacao'] as double).toInt() : null),
-                                            tamanho: 15,
-                                          ),
-    
-                                          if (livro['lido'] == true) ...[
-                                            if (_formatarDataCurta(livro['dataConclusao']?.toString()).isNotEmpty) ...[
-                                              const SizedBox(height: 6),
-                                              Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  const Icon(Icons.event_available_rounded, size: 12, color: Color(0xFF2E7D32)),
-                                                  const SizedBox(width: 4),
-                                                  Text(
-                                                    'Concluído em ${_formatarDataCurta(livro['dataConclusao']?.toString())}',
-                                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                                          color: const Color(0xFF2E7D32),
-                                                          fontWeight: FontWeight.w600,
-                                                        ),
-                                                  ),
-                                                ],
+                                          Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              const Icon(Icons.event_available_rounded, size: 12, color: Color(0xFF2E7D32)),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                'Concluído em ${_formatarDataCurta(livro['dataConclusao']?.toString())}',
+                                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                                      color: const Color(0xFF2E7D32),
+                                                      fontWeight: FontWeight.w600,
+                                                    ),
                                               ),
                                             ],
-                                          ],
+                                          ),
                                         ],
-                                      ),
-                                    ),
-                                    trailing: Container(
-                                      width: 36,
-                                      height: 36,
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(12),
-                                        color: const Color(0xFFF1EEFF),
-                                      ),
-                                      child: const Icon(Icons.chevron_right_rounded, color: Color(0xFF7C4DFF)),
-                                    ),
-                                    onTap: () async {
-                                      final resultado = await Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) => DetalheLivroPage(livro: livro),
-                                        ),
-                                      );
-                                      if (resultado == true) {
-                                        _buscaController.clear();
-                                        buscarLivros();
-                                      }
-                                    },
+                                      ],
+                                    ],
                                   ),
                                 ),
-                              );
-                            },
-                          ),
+                                trailing: Container(
+                                  width: 36,
+                                  height: 36,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(12),
+                                    color: const Color(0xFFF1EEFF),
+                                  ),
+                                  child: const Icon(Icons.chevron_right_rounded, color: Color(0xFF7C4DFF)),
+                                ),
+                                onTap: () async {
+                                  final resultado = await Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => DetalheLivroPage(livro: livro),
+                                    ),
+                                  );
+                                  if (resultado == true) {
+                                    _buscaController.clear();
+                                    buscarLivros();
+                                  }
+                                },
+                              ),
+                            ),
+                          );
+                        },
+                        childCount: _livrosFiltrados.length,
+                      ),
+                    ),
+                  const SliverToBoxAdapter(
+                    child: SizedBox(height: 24),
                   ),
                 ],
               ),

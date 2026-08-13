@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:image_picker/image_picker.dart';
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:frontend/services/google_books_service.dart';
 
 class DetalheLivroPage extends StatefulWidget {
   final Map<String, dynamic> livro;
@@ -26,6 +28,10 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
   late int? _avaliacao;
   late DateTime? _dataConclusao;
   bool _jaAvisouLimiteDesc = false;
+  Uint8List? _capaBytes;
+  String? _capaUrlLocal; // fallback local da URL quando em edição
+  String? _tipoCapa; // 'url' ou 'bytes'
+  final ImagePicker _imagePicker = ImagePicker();
 
   void _mostrarMensagem(String mensagem) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -124,6 +130,165 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
     return fallback;
   }
 
+  Future<void> _selecionarDaGaleria() async {
+    try {
+      final XFile? imagem = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+      );
+      if (imagem != null) {
+        final bytes = await imagem.readAsBytes();
+        if (!mounted) return;
+        setState(() {
+          _capaBytes = bytes;
+          _capaUrlLocal = null;
+          _tipoCapa = 'bytes';
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      _mostrarMensagem('Nao foi possivel selecionar a imagem.');
+    }
+  }
+
+  Future<void> _tirarFotoComCamera() async {
+    try {
+      final XFile? imagem = await _imagePicker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 85,
+        preferredCameraDevice: CameraDevice.rear,
+      );
+      if (imagem != null) {
+        final bytes = await imagem.readAsBytes();
+        if (!mounted) return;
+        setState(() {
+          _capaBytes = bytes;
+          _capaUrlLocal = null;
+          _tipoCapa = 'bytes';
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      _mostrarMensagem('Nao foi possivel tirar a foto.');
+    }
+  }
+
+  void _removerCapa() {
+    setState(() {
+      _capaUrlLocal = null;
+      _capaBytes = null;
+      _tipoCapa = null;
+    });
+  }
+
+  Future<void> _abrirDialogBuscarCapa() async {
+    final buscaController = TextEditingController(text: _tituloController.text.trim());
+    final formKey = GlobalKey<FormState>();
+    bool buscandoInterno = false;
+
+    final resultado = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctxDialog) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            return AlertDialog(
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              title: const Text('Buscar capa do livro'),
+              content: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      'Digite o título para procurar a capa do livro.',
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: buscaController,
+                      autofocus: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Título do livro',
+                        prefixIcon: Icon(Icons.search_rounded),
+                      ),
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty) {
+                          return 'Digite um título para buscar';
+                        }
+                        return null;
+                      },
+                      onFieldSubmitted: (_) async {
+                        if (!formKey.currentState!.validate()) return;
+                        setDialogState(() => buscandoInterno = true);
+                        final capa = await GoogleBooksService.buscarCapa(buscaController.text);
+                        if (!mounted) return;
+                        setDialogState(() => buscandoInterno = false);
+                        setState(() {
+                          _capaUrlLocal = capa;
+                          _capaBytes = null;
+                          _tipoCapa = capa != null ? 'url' : null;
+                        });
+                        Navigator.of(ctxDialog).pop(capa != null);
+                      },
+                    ),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      height: 52,
+                      child: ElevatedButton.icon(
+                        onPressed: buscandoInterno
+                            ? null
+                            : () async {
+                                if (!formKey.currentState!.validate()) return;
+                                setDialogState(() => buscandoInterno = true);
+                                final capa = await GoogleBooksService.buscarCapa(buscaController.text);
+                                if (!mounted) return;
+                                setDialogState(() => buscandoInterno = false);
+                                setState(() {
+                                  _capaUrlLocal = capa;
+                                  _capaBytes = null;
+                                  _tipoCapa = capa != null ? 'url' : null;
+                                });
+                                Navigator.of(ctxDialog).pop(capa != null);
+                              },
+                        style: ElevatedButton.styleFrom(
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        ),
+                        icon: buscandoInterno
+                            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            : const Icon(Icons.search_rounded, size: 18),
+                        label: Text(buscandoInterno ? 'Buscando...' : 'Buscar', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      height: 52,
+                      child: OutlinedButton.icon(
+                        onPressed: buscandoInterno ? null : () => Navigator.of(ctxDialog).pop(false),
+                        style: OutlinedButton.styleFrom(
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        ),
+                        icon: const Icon(Icons.close_rounded, size: 18),
+                        label: const Text('Cancelar', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (resultado == true) {
+      _mostrarMensagem('Capa encontrada!');
+    } else if (resultado == false) {
+      _mostrarMensagem('Nenhuma capa foi encontrada para esse título.');
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -136,6 +301,26 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
     final aval = widget.livro['avaliacao'];
     _avaliacao = aval is int ? aval : (aval is double ? aval.toInt() : null);
     _dataConclusao = _parseDataISO(widget.livro['dataConclusao']?.toString());
+    final imgOriginal = widget.livro['imagem']?.toString();
+    if (imgOriginal != null && imgOriginal.isNotEmpty) {
+      final ehBase64 = imgOriginal.startsWith('data:image') || imgOriginal.length > 1000;
+      _tipoCapa = ehBase64 ? 'bytes' : 'url';
+      if (ehBase64) {
+        try {
+          if (imgOriginal.startsWith('data:image')) {
+            final commaIdx = imgOriginal.indexOf(',');
+            _capaBytes = base64Decode(commaIdx != -1 ? imgOriginal.substring(commaIdx + 1) : imgOriginal);
+          } else {
+            _capaBytes = base64Decode(imgOriginal);
+          }
+        } catch (_) {
+          _capaBytes = null;
+          _tipoCapa = null;
+        }
+      } else {
+        _capaUrlLocal = imgOriginal;
+      }
+    }
   }
 
   void _cancelarEdicao() {
@@ -148,11 +333,50 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
     final aval = widget.livro['avaliacao'];
     _avaliacao = aval is int ? aval : (aval is double ? aval.toInt() : null);
     _dataConclusao = _parseDataISO(widget.livro['dataConclusao']?.toString());
+    final imgOriginal = widget.livro['imagem']?.toString();
+    _capaBytes = null;
+    _capaUrlLocal = null;
+    _tipoCapa = null;
+    if (imgOriginal != null && imgOriginal.isNotEmpty) {
+      final ehBase64 = imgOriginal.startsWith('data:image') || imgOriginal.length > 1000;
+      _tipoCapa = ehBase64 ? 'bytes' : 'url';
+      if (ehBase64) {
+        try {
+          if (imgOriginal.startsWith('data:image')) {
+            final commaIdx = imgOriginal.indexOf(',');
+            _capaBytes = base64Decode(commaIdx != -1 ? imgOriginal.substring(commaIdx + 1) : imgOriginal);
+          } else {
+            _capaBytes = base64Decode(imgOriginal);
+          }
+        } catch (_) {
+          _capaBytes = null;
+          _tipoCapa = null;
+        }
+      } else {
+        _capaUrlLocal = imgOriginal;
+      }
+    }
     setState(() => _editando = false);
   }
 
   Future<void> _salvarEdicao() async {
     setState(() => _salvando = true);
+
+    // Define o valor de imagem a ser salvo:
+    // - Se o usuario mudou para base64 (camera/galeria): envia o base64
+    // - Se o usuario mudou para URL (busca): envia a URL
+    // - Se o usuario removeu a capa (tipoCapa == null e original nao era nulo): envia null
+    // - Se o usuario NAO mexeu na capa (_tipoCapa == null E original era nulo OU _tipoCapa nao mudou em relacao ao original): envia o original (backward compat)
+    String? imagemParaSalvar;
+    if (_tipoCapa == 'bytes' && _capaBytes != null) {
+      imagemParaSalvar = base64Encode(_capaBytes!);
+    } else if (_tipoCapa == 'url') {
+      imagemParaSalvar = _capaUrlLocal;
+    } else if (_tipoCapa == null) {
+      imagemParaSalvar = null; // usuario removeu
+    } else {
+      imagemParaSalvar = widget.livro['imagem']?.toString();
+    }
 
     final livroAtualizado = {
       'titulo': _tituloController.text.trim(),
@@ -160,7 +384,7 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
       'editora': _editoraController.text.trim(),
       'genero': _generoController.text.trim(),
       'descricao': _descricaoController.text.trim(),
-      'imagem': widget.livro['imagem'],
+      'imagem': imagemParaSalvar,
       'lido': _lido,
       'avaliacao': _avaliacao,
       'dataConclusao': _lido && _dataConclusao != null ? _formatarDataISO(_dataConclusao) : null,
@@ -265,109 +489,243 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
                 ),
                 child: Column(
                   children: [
-                    if (widget.livro['imagem'] != null && 
-                        widget.livro['imagem'].toString().isNotEmpty)
-                      () {
-                        final imagemStr = widget.livro['imagem'].toString();
-                        final ehBase64 = imagemStr.startsWith('data:image') || imagemStr.length > 1000;
-                        Widget capaOk;
-                        if (ehBase64) {
-                          try {
-                            Uint8List bytes;
-                            if (imagemStr.startsWith('data:image')) {
-                              final commaIdx = imagemStr.indexOf(',');
-                              final b64 = commaIdx != -1 ? imagemStr.substring(commaIdx + 1) : imagemStr;
-                              bytes = base64Decode(b64);
-                            } else {
-                              bytes = base64Decode(imagemStr);
+                    // --- CAPA do livro ---
+                    if (!_editando) ...[
+                      // MODO LEITURA: usa o original do banco
+                      if (widget.livro['imagem'] != null &&
+                          widget.livro['imagem'].toString().isNotEmpty)
+                        () {
+                          final imagemStr = widget.livro['imagem'].toString();
+                          final ehBase64 = imagemStr.startsWith('data:image') || imagemStr.length > 1000;
+                          Widget capaOk;
+                          if (ehBase64) {
+                            try {
+                              Uint8List bytes;
+                              if (imagemStr.startsWith('data:image')) {
+                                final commaIdx = imagemStr.indexOf(',');
+                                final b64 = commaIdx != -1 ? imagemStr.substring(commaIdx + 1) : imagemStr;
+                                bytes = base64Decode(b64);
+                              } else {
+                                bytes = base64Decode(imagemStr);
+                              }
+                              capaOk = ClipRRect(
+                                borderRadius: BorderRadius.circular(16),
+                                child: Image.memory(
+                                  bytes,
+                                  height: 220,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Container(
+                                    height: 220,
+                                    width: 150,
+                                    color: const Color(0xFFF1EEFF),
+                                    alignment: Alignment.center,
+                                    child: const Icon(Icons.broken_image, size: 40),
+                                  ),
+                                ),
+                              );
+                            } catch (_) {
+                              capaOk = Container(
+                                height: 220,
+                                width: 150,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF1EEFF),
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: const Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.menu_book_rounded, size: 52, color: Color(0xFF7C4DFF)),
+                                    SizedBox(height: 12),
+                                    Text(
+                                      'Sem capa',
+                                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF5F5F7A)),
+                                    ),
+                                  ],
+                                ),
+                              );
                             }
+                          } else {
                             capaOk = ClipRRect(
                               borderRadius: BorderRadius.circular(16),
-                              child: Image.memory(
-                                bytes,
+                              child: CachedNetworkImage(
+                                imageUrl: imagemStr,
                                 height: 220,
                                 fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => Container(
+                                placeholder: (context, url) => const SizedBox(
+                                  height: 220,
+                                  child: Center(child: CircularProgressIndicator()),
+                                ),
+                                errorWidget: (context, url, error) => Container(
                                   height: 220,
                                   width: 150,
-                                  color: const Color(0xFFF1EEFF),
+                                  color: Colors.grey.shade300,
                                   alignment: Alignment.center,
                                   child: const Icon(Icons.broken_image, size: 40),
                                 ),
                               ),
                             );
-                          } catch (_) {
-                            capaOk = Container(
+                          }
+                          return capaOk;
+                        }()
+                      else
+                        Container(
+                          height: 220,
+                          width: 150,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF1EEFF),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: const Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.menu_book_rounded,
+                                size: 52,
+                                color: Color(0xFF7C4DFF),
+                              ),
+                              SizedBox(height: 12),
+                              Text(
+                                'Sem capa',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF5F5F7A),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ] else ...[
+                      // MODO EDIÇÃO: usa os valores locais (capaBytes, capaUrlLocal)
+                      if (_tipoCapa == 'bytes' && _capaBytes != null)
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: Image.memory(
+                            _capaBytes!,
+                            height: 220,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(
                               height: 220,
                               width: 150,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF1EEFF),
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              child: const Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.menu_book_rounded, size: 52, color: Color(0xFF7C4DFF)),
-                                  SizedBox(height: 12),
-                                  Text(
-                                    'Sem capa',
-                                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF5F5F7A)),
-                                  ),
-                                ],
-                              ),
-                            );
-                          }
-                        } else {
-                          capaOk = ClipRRect(
-                            borderRadius: BorderRadius.circular(16),
-                            child: CachedNetworkImage(
-                              imageUrl: imagemStr,
-                              height: 220,
-                              fit: BoxFit.cover,
-                              placeholder: (context, url) => const SizedBox(
-                                height: 220,
-                                child: Center(child: CircularProgressIndicator()),
-                              ),
-                              errorWidget: (context, url, error) => Container(
-                                height: 220,
-                                width: 150,
-                                color: Colors.grey.shade300,
-                                alignment: Alignment.center,
-                                child: const Icon(Icons.broken_image, size: 40),
-                              ),
+                              color: const Color(0xFFF1EEFF),
+                              alignment: Alignment.center,
+                              child: const Icon(Icons.broken_image, size: 40),
                             ),
-                          );
-                        }
-                        return capaOk;
-                      }()
-                    else
-                      Container(
-                        height: 220,
-                        width: 150,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF1EEFF),
+                          ),
+                        )
+                      else if (_tipoCapa == 'url' && _capaUrlLocal != null)
+                        ClipRRect(
                           borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: const Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.menu_book_rounded,
-                              size: 52,
-                              color: Color(0xFF7C4DFF),
+                          child: CachedNetworkImage(
+                            imageUrl: _capaUrlLocal!,
+                            height: 220,
+                            fit: BoxFit.cover,
+                            placeholder: (context, url) => const SizedBox(
+                              height: 220,
+                              child: Center(child: CircularProgressIndicator()),
                             ),
-                            SizedBox(height: 12),
-                            Text(
-                              'Sem capa',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF5F5F7A),
+                            errorWidget: (context, url, error) => Container(
+                              height: 220,
+                              width: 150,
+                              color: Colors.grey.shade300,
+                              alignment: Alignment.center,
+                              child: const Icon(Icons.broken_image, size: 40),
+                            ),
+                          ),
+                        )
+                      else
+                        Container(
+                          height: 220,
+                          width: 150,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF1EEFF),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: const Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.menu_book_rounded,
+                                size: 52,
+                                color: Color(0xFF7C4DFF),
+                              ),
+                              SizedBox(height: 12),
+                              Text(
+                                'Sem capa',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF5F5F7A),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      const SizedBox(height: 20),
+                      const Text(
+                        'Capa do livro',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF2A2A38)),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Edite a capa: tire uma foto, selecione da galeria ou busque pelo título.',
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: _tirarFotoComCamera,
+                              icon: const Icon(Icons.camera_alt_rounded, size: 16, color: Color(0xFF7C4DFF)),
+                              label: const Text('Câmera', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF7C4DFF))),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
                               ),
                             ),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: _selecionarDaGaleria,
+                              icon: const Icon(Icons.image_outlined, size: 16, color: Color(0xFF7C4DFF)),
+                              label: const Text('Galeria', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF7C4DFF))),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: _abrirDialogBuscarCapa,
+                              icon: const Icon(Icons.search_rounded, size: 16, color: Color(0xFF7C4DFF)),
+                              label: const Text('Buscar', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF7C4DFF))),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
+                      if (_tipoCapa != null) ...[
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: _removerCapa,
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFFB3261E),
+                              side: const BorderSide(color: Color(0xFFB3261E)),
+                            ),
+                            icon: const Icon(Icons.close_rounded, size: 18),
+                            label: const Text('Remover capa'),
+                          ),
+                        ),
+                      ],
+                    ],
+                    // --- FIM DA CAPA ---
+
                       const SizedBox(height: 16),
                       Text(
                         widget.livro['titulo'] ?? 'Livro sem título',
