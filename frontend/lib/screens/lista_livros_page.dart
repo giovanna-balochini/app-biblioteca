@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:async';
 import 'package:frontend/screens/cadastro_livro_page.dart';
 import 'package:frontend/screens/detalhe_livro_page.dart';
 import 'package:frontend/widgets/estrelas_avaliacao.dart';
 import 'package:frontend/widgets/capa_livro.dart';
 import 'package:frontend/utils/formatters.dart';
+import 'package:frontend/utils/snackbars.dart';
 
 enum OpcaoOrdenacao {
   tituloAZ,
@@ -53,19 +55,28 @@ class _ListaLivrosPageState extends State<ListaLivrosPage> {
   List<dynamic> livros = [];
   bool carregando = true;
   final _buscaController = TextEditingController();
+  final _scrollController = ScrollController();
   List<dynamic> _livrosFiltrados = [];
+  List<dynamic> _livrosPaginados = [];
   String _filtroStatus = 'todos';
   OpcaoOrdenacao _ordenacaoAtual = OpcaoOrdenacao.dataCadastroMaisRecente;
+  Timer? _debounceBusca;
+  bool _carregandoMais = false;
+  bool _temMaisParaCarregar = false;
+  static const int _tamanhoPagina = 10;
 
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_aoRolarAteOFinal);
     buscarLivros();
   }
 
   @override
   void dispose() {
     _buscaController.dispose();
+    _debounceBusca?.cancel();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -79,17 +90,53 @@ class _ListaLivrosPageState extends State<ListaLivrosPage> {
         livros = json.decode(response.body);
         carregando = false;
       });
-      _aplicarFiltros();
+      _aplicarFiltros(resetarPagina: true);
     }
   }
 
-  void _aplicarFiltros() {
-    _filtrarLivros(_buscaController.text);
+  void _aplicarFiltros({bool resetarPagina = true}) {
+    _filtrarLivros(_buscaController.text, resetarPagina: resetarPagina);
   }
 
   Future<void> _atualizarLivros() async {
     await buscarLivros();
-    _aplicarFiltros();
+    if (!mounted) return;
+    mostrarSnackbarSucesso(context, 'Biblioteca atualizada!');
+  }
+
+  void _aoDigitarBusca(String valor) {
+    if (_debounceBusca?.isActive ?? false) _debounceBusca!.cancel();
+    _debounceBusca = Timer(const Duration(milliseconds: 300), () {
+      if (mounted) _aplicarFiltros(resetarPagina: true);
+    });
+  }
+
+  void _aoRolarAteOFinal() {
+    if (_carregandoMais || !_temMaisParaCarregar) return;
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+      _carregarProximaPagina();
+    }
+  }
+
+  void _carregarProximaPagina() {
+    if (_carregandoMais || !_temMaisParaCarregar) return;
+    setState(() => _carregandoMais = true);
+
+    Future.delayed(const Duration(milliseconds: 150), () {
+      if (!mounted) return;
+      _atualizarPagina(incrementar: true);
+      setState(() => _carregandoMais = false);
+    });
+  }
+
+  void _atualizarPagina({bool incrementar = false}) {
+    final totalDisponivel = _livrosFiltrados.length;
+    int proximoFim = _livrosPaginados.length + (incrementar ? _tamanhoPagina : _tamanhoPagina);
+    proximoFim = proximoFim.clamp(0, totalDisponivel);
+    setState(() {
+      _livrosPaginados = _livrosFiltrados.sublist(0, proximoFim);
+      _temMaisParaCarregar = _livrosPaginados.length < totalDisponivel;
+    });
   }
 
   Future<void> _abrirOpcoesOrdenacao() async {
@@ -141,7 +188,7 @@ class _ListaLivrosPageState extends State<ListaLivrosPage> {
                         Navigator.pop(context);
                         if (_ordenacaoAtual != opcao) {
                           setState(() => _ordenacaoAtual = opcao);
-                          _aplicarFiltros();
+                          _aplicarFiltros(resetarPagina: true);
                         }
                       },
                       child: Container(
@@ -211,69 +258,82 @@ class _ListaLivrosPageState extends State<ListaLivrosPage> {
     );
   }
 
-  void _filtrarLivros(String busca) {
-    setState(() {
-      final termo = busca.trim().toLowerCase();
+  void _filtrarLivros(String busca, {bool resetarPagina = true}) {
+    final termo = busca.trim().toLowerCase();
 
-      Iterable<dynamic> resultado = livros;
-      if (termo.isNotEmpty) {
-        resultado = resultado.where((livro) {
-          final titulo = (livro['titulo'] ?? '').toString().toLowerCase();
-          final autor = (livro['autor'] ?? '').toString().toLowerCase();
-          final editora = (livro['editora'] ?? '').toString().toLowerCase();
-          final genero = (livro['genero'] ?? '').toString().toLowerCase();
-          return titulo.contains(termo) ||
-              autor.contains(termo) ||
-              editora.contains(termo) ||
-              genero.contains(termo);
+    Iterable<dynamic> resultado = livros;
+    if (termo.isNotEmpty) {
+      resultado = resultado.where((livro) {
+        final titulo = (livro['titulo'] ?? '').toString().toLowerCase();
+        final autor = (livro['autor'] ?? '').toString().toLowerCase();
+        final editora = (livro['editora'] ?? '').toString().toLowerCase();
+        final genero = (livro['genero'] ?? '').toString().toLowerCase();
+        return titulo.contains(termo) ||
+            autor.contains(termo) ||
+            editora.contains(termo) ||
+            genero.contains(termo);
+      });
+    }
+
+    if (_filtroStatus == 'lidos') {
+      resultado = resultado.where((livro) => livro['lido'] == true);
+    } else if (_filtroStatus == 'nao_lidos') {
+      resultado = resultado.where((livro) => livro['lido'] != true);
+    }
+
+    final listaOrdenada = resultado.toList();
+    switch (_ordenacaoAtual) {
+      case OpcaoOrdenacao.tituloAZ:
+        listaOrdenada.sort((a, b) {
+          final ta = (a['titulo'] ?? '').toString().toLowerCase();
+          final tb = (b['titulo'] ?? '').toString().toLowerCase();
+          return ta.compareTo(tb);
         });
-      }
+        break;
+      case OpcaoOrdenacao.autorAZ:
+        listaOrdenada.sort((a, b) {
+          final aa = (a['autor'] ?? '').toString().toLowerCase();
+          final ab = (b['autor'] ?? '').toString().toLowerCase();
+          return aa.compareTo(ab);
+        });
+        break;
+      case OpcaoOrdenacao.dataConclusaoMaisRecente:
+        listaOrdenada.sort((a, b) {
+          final da = a['dataConclusao']?.toString();
+          final db = b['dataConclusao']?.toString();
+          if ((da == null || da.isEmpty) && (db == null || db.isEmpty)) return 0;
+          if (da == null || da.isEmpty) return 1;
+          if (db == null || db.isEmpty) return -1;
+          return db.compareTo(da);
+        });
+        break;
+      case OpcaoOrdenacao.dataCadastroMaisRecente:
+        listaOrdenada.sort((a, b) {
+          final ida = a['id'];
+          final idb = b['id'];
+          if (ida is int && idb is int) return idb.compareTo(ida);
+          if (ida == null) return 1;
+          if (idb == null) return -1;
+          return idb.toString().compareTo(ida.toString());
+        });
+        break;
+    }
 
-      if (_filtroStatus == 'lidos') {
-        resultado = resultado.where((livro) => livro['lido'] == true);
-      } else if (_filtroStatus == 'nao_lidos') {
-        resultado = resultado.where((livro) => livro['lido'] != true);
-      }
-
-      final listaOrdenada = resultado.toList();
-      switch (_ordenacaoAtual) {
-        case OpcaoOrdenacao.tituloAZ:
-          listaOrdenada.sort((a, b) {
-            final ta = (a['titulo'] ?? '').toString().toLowerCase();
-            final tb = (b['titulo'] ?? '').toString().toLowerCase();
-            return ta.compareTo(tb);
-          });
-          break;
-        case OpcaoOrdenacao.autorAZ:
-          listaOrdenada.sort((a, b) {
-            final aa = (a['autor'] ?? '').toString().toLowerCase();
-            final ab = (b['autor'] ?? '').toString().toLowerCase();
-            return aa.compareTo(ab);
-          });
-          break;
-        case OpcaoOrdenacao.dataConclusaoMaisRecente:
-          listaOrdenada.sort((a, b) {
-            final da = a['dataConclusao']?.toString();
-            final db = b['dataConclusao']?.toString();
-            if ((da == null || da.isEmpty) && (db == null || db.isEmpty)) return 0;
-            if (da == null || da.isEmpty) return 1;
-            if (db == null || db.isEmpty) return -1;
-            return db.compareTo(da);
-          });
-          break;
-        case OpcaoOrdenacao.dataCadastroMaisRecente:
-          listaOrdenada.sort((a, b) {
-            final ida = a['id'];
-            final idb = b['id'];
-            if (ida is int && idb is int) return idb.compareTo(ida);
-            if (ida == null) return 1;
-            if (idb == null) return -1;
-            return idb.toString().compareTo(ida.toString());
-          });
-          break;
-      }
-
+    setState(() {
       _livrosFiltrados = listaOrdenada;
+      if (resetarPagina) {
+        final total = listaOrdenada.length;
+        final fim = total.clamp(0, _tamanhoPagina);
+        _livrosPaginados = listaOrdenada.sublist(0, fim);
+        _temMaisParaCarregar = _livrosPaginados.length < total;
+        if (_scrollController.hasClients && _scrollController.offset > 0) {
+          _scrollController.animateTo(
+            0,
+            duration: const Duration(milliseconds: 350),
+            curve: Curves.easeOutCubic,
+          );
+        }
+      }
     });
   }
 
@@ -293,7 +353,7 @@ class _ListaLivrosPageState extends State<ListaLivrosPage> {
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 12,
             offset: const Offset(0, 3),
           ),
@@ -401,6 +461,65 @@ class _ListaLivrosPageState extends State<ListaLivrosPage> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildChipFiltro({
+    required String rotulo,
+    required String statusValor,
+    required IconData icone,
+    required Color corSelecionado,
+    required Color corIconeNaoSelecionado,
+    required Color corBordaNaoSelecionado,
+  }) {
+    final selecionado = _filtroStatus == statusValor;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: AnimatedScale(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutBack,
+        scale: selecionado ? 1.03 : 1.0,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            boxShadow: [
+              if (selecionado)
+                BoxShadow(
+                  color: corSelecionado.withValues(alpha: 0.25),
+                  blurRadius: 10,
+                  spreadRadius: 0.5,
+                  offset: const Offset(0, 3),
+                ),
+            ],
+          ),
+          child: ChoiceChip(
+            label: Text(rotulo),
+            selected: selecionado,
+            onSelected: (_) {
+              setState(() => _filtroStatus = statusValor);
+              _aplicarFiltros(resetarPagina: true);
+            },
+            selectedColor: corSelecionado,
+            backgroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            labelStyle: TextStyle(
+              color: selecionado ? Colors.white : const Color(0xFF5F5F7A),
+              fontWeight: FontWeight.w700,
+            ),
+            side: BorderSide(
+              color: selecionado ? corSelecionado : corBordaNaoSelecionado,
+              width: 1.2,
+            ),
+            avatar: Icon(
+              icone,
+              size: 18,
+              color: selecionado ? Colors.white : corIconeNaoSelecionado,
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -559,6 +678,7 @@ class _ListaLivrosPageState extends State<ListaLivrosPage> {
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: CustomScrollView(
+                      controller: _scrollController,
                       physics: const AlwaysScrollableScrollPhysics(),
                       slivers: [
                       SliverToBoxAdapter(
@@ -572,7 +692,7 @@ class _ListaLivrosPageState extends State<ListaLivrosPage> {
                                 Expanded(
                                   child: TextField(
                                     controller: _buscaController,
-                                    onChanged: _filtrarLivros,
+                                    onChanged: _aoDigitarBusca,
                                     decoration: InputDecoration(
                                       labelText: 'Buscar livro',
                                       hintText: 'Pesquise por título, autor, editora ou gênero',
@@ -582,7 +702,8 @@ class _ListaLivrosPageState extends State<ListaLivrosPage> {
                                               icon: const Icon(Icons.close, color: Color(0xFF7C4DFF)),
                                               onPressed: () {
                                                 _buscaController.clear();
-                                                _aplicarFiltros();
+                                                _debounceBusca?.cancel();
+                                                _aplicarFiltros(resetarPagina: true);
                                               },
                                             )
                                           : null,
@@ -618,71 +739,56 @@ class _ListaLivrosPageState extends State<ListaLivrosPage> {
                               scrollDirection: Axis.horizontal,
                               child: Row(
                                 children: [
-                                  ChoiceChip(
-                                    label: const Text('Todos'),
-                                    selected: _filtroStatus == 'todos',
-                                    onSelected: (_) {
-                                      setState(() => _filtroStatus = 'todos');
-                                      _aplicarFiltros();
-                                    },
-                                    selectedColor: const Color(0xFF7C4DFF),
-                                    backgroundColor: Colors.white,
-                                    labelStyle: TextStyle(
-                                      color: _filtroStatus == 'todos' ? Colors.white : const Color(0xFF5F5F7A),
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                    side: const BorderSide(color: Color(0xFFE0DBF2)),
-                                    avatar: Icon(
-                                      Icons.library_books_rounded,
-                                      size: 18,
-                                      color: _filtroStatus == 'todos' ? Colors.white : const Color(0xFF7C4DFF),
-                                    ),
+                                  _buildChipFiltro(
+                                    rotulo: 'Todos',
+                                    statusValor: 'todos',
+                                    icone: Icons.library_books_rounded,
+                                    corSelecionado: const Color(0xFF7C4DFF),
+                                    corIconeNaoSelecionado: const Color(0xFF7C4DFF),
+                                    corBordaNaoSelecionado: const Color(0xFFE0DBF2),
                                   ),
-                                  const SizedBox(width: 8),
-                                  ChoiceChip(
-                                    label: const Text('Lidos'),
-                                    selected: _filtroStatus == 'lidos',
-                                    onSelected: (_) {
-                                      setState(() => _filtroStatus = 'lidos');
-                                      _aplicarFiltros();
-                                    },
-                                    selectedColor: const Color(0xFF2E7D32),
-                                    backgroundColor: Colors.white,
-                                    labelStyle: TextStyle(
-                                      color: _filtroStatus == 'lidos' ? Colors.white : const Color(0xFF5F5F7A),
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                    side: const BorderSide(color: Color(0xFFD7EBDB)),
-                                    avatar: Icon(
-                                      Icons.check_circle_rounded,
-                                      size: 18,
-                                      color: _filtroStatus == 'lidos' ? Colors.white : const Color(0xFF2E7D32),
-                                    ),
+                                  _buildChipFiltro(
+                                    rotulo: 'Lidos',
+                                    statusValor: 'lidos',
+                                    icone: Icons.check_circle_rounded,
+                                    corSelecionado: const Color(0xFF2E7D32),
+                                    corIconeNaoSelecionado: const Color(0xFF2E7D32),
+                                    corBordaNaoSelecionado: const Color(0xFFD7EBDB),
                                   ),
-                                  const SizedBox(width: 8),
-                                  ChoiceChip(
-                                    label: const Text('Não lidos'),
-                                    selected: _filtroStatus == 'nao_lidos',
-                                    onSelected: (_) {
-                                      setState(() => _filtroStatus = 'nao_lidos');
-                                      _aplicarFiltros();
-                                    },
-                                    selectedColor: const Color(0xFF7C4DFF),
-                                    backgroundColor: Colors.white,
-                                    labelStyle: TextStyle(
-                                      color: _filtroStatus == 'nao_lidos' ? Colors.white : const Color(0xFF5F5F7A),
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                    side: const BorderSide(color: Color(0xFFE0DBF2)),
-                                    avatar: Icon(
-                                      Icons.menu_book_outlined,
-                                      size: 18,
-                                      color: _filtroStatus == 'nao_lidos' ? Colors.white : const Color(0xFF7C4DFF),
-                                    ),
+                                  _buildChipFiltro(
+                                    rotulo: 'Não lidos',
+                                    statusValor: 'nao_lidos',
+                                    icone: Icons.menu_book_outlined,
+                                    corSelecionado: const Color(0xFF7C4DFF),
+                                    corIconeNaoSelecionado: const Color(0xFF7C4DFF),
+                                    corBordaNaoSelecionado: const Color(0xFFE0DBF2),
                                   ),
                                 ],
                               ),
                             ),
+                            if (_livrosFiltrados.isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Text(
+                                    'Exibindo ${_livrosPaginados.length} de ${_livrosFiltrados.length} ${_livrosFiltrados.length == 1 ? 'livro' : 'livros'}',
+                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                          color: const Color(0xFF6B6B80),
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                  ),
+                                  const Spacer(),
+                                  if (_temMaisParaCarregar)
+                                    Text(
+                                      'Role para ver mais',
+                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                            color: const Color(0xFF7C4DFF),
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                    ),
+                                ],
+                              ),
+                            ],
                             const SizedBox(height: 14),
                           ],
                         ),
@@ -728,8 +834,9 @@ class _ListaLivrosPageState extends State<ListaLivrosPage> {
                                     OutlinedButton.icon(
                                       onPressed: () {
                                         _buscaController.clear();
+                                        _debounceBusca?.cancel();
                                         setState(() => _filtroStatus = 'todos');
-                                        _aplicarFiltros();
+                                        _aplicarFiltros(resetarPagina: true);
                                       },
                                       icon: const Icon(Icons.refresh_rounded, size: 18),
                                       label: const Text('Limpar filtros'),
@@ -744,7 +851,35 @@ class _ListaLivrosPageState extends State<ListaLivrosPage> {
                         SliverList(
                           delegate: SliverChildBuilderDelegate(
                             (context, index) {
-                              final livro = _livrosFiltrados[index];
+                              if (index == _livrosPaginados.length) {
+                                return Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 18),
+                                  child: Center(
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        const SizedBox(
+                                          width: 18,
+                                          height: 18,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2.2,
+                                            color: Color(0xFF7C4DFF),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Text(
+                                          'Carregando mais livros...',
+                                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                                color: const Color(0xFF5F5F7A),
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              }
+                              final livro = _livrosPaginados[index];
                               return Padding(
                                 padding: const EdgeInsets.only(bottom: 12),
                                 child: Card(
@@ -809,6 +944,7 @@ class _ListaLivrosPageState extends State<ListaLivrosPage> {
                                       );
                                       if (resultado == true) {
                                         _buscaController.clear();
+                                        _debounceBusca?.cancel();
                                         buscarLivros();
                                       }
                                     },
@@ -816,7 +952,7 @@ class _ListaLivrosPageState extends State<ListaLivrosPage> {
                                 ),
                               );
                             },
-                            childCount: _livrosFiltrados.length,
+                            childCount: _livrosPaginados.length + (_carregandoMais || _temMaisParaCarregar ? 1 : 0),
                           ),
                         ),
                       const SliverToBoxAdapter(

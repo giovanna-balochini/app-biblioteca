@@ -8,6 +8,7 @@ import 'package:frontend/services/google_books_service.dart';
 import 'package:frontend/widgets/estrelas_avaliacao.dart';
 import 'package:frontend/widgets/info_tile.dart';
 import 'package:frontend/utils/formatters.dart';
+import 'package:frontend/utils/snackbars.dart';
 
 class DetalheLivroPage extends StatefulWidget {
   final Map<String, dynamic> livro;
@@ -36,10 +37,75 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
   String? _tipoCapa;
   final ImagePicker _imagePicker = ImagePicker();
 
-  void _mostrarMensagem(String mensagem) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(mensagem)),
+  bool _capaFoiAlterada() {
+    final original = widget.livro['imagem']?.toString();
+    final originalVazia = original == null || original.isEmpty;
+    final temCapaLocal = _capaBytes != null;
+    final temUrlLocal = _tipoCapa == 'url' && _capaUrlLocal != null;
+
+    if (_tipoCapa == null && originalVazia) return false;
+    if (_tipoCapa == null && !originalVazia) return true;
+    if (temCapaLocal) return true;
+    if (temUrlLocal) return _capaUrlLocal != original;
+    return false;
+  }
+
+  int? _avaliacaoOriginal() {
+    final aval = widget.livro['avaliacao'];
+    return aval is int ? aval : (aval is double ? aval.toInt() : null);
+  }
+
+  bool _formularioFoiAlterado() {
+    final titulo = _tituloController.text.trim();
+    final autor = _autorController.text.trim();
+    final editora = _editoraController.text.trim();
+    final genero = _generoController.text.trim();
+    final descricao = _descricaoController.text.trim();
+
+    final tOriginal = widget.livro['titulo']?.toString() ?? '';
+    final aOriginal = widget.livro['autor']?.toString() ?? '';
+    final eOriginal = widget.livro['editora']?.toString() ?? '';
+    final gOriginal = widget.livro['genero']?.toString() ?? '';
+    final dOriginal = widget.livro['descricao']?.toString() ?? '';
+    final lidoOriginal = widget.livro['lido'] == true;
+    final avalOriginal = _avaliacaoOriginal();
+    final dataOriginal = parseDataISO(widget.livro['dataConclusao']?.toString());
+
+    return titulo != tOriginal ||
+        autor != aOriginal ||
+        editora != eOriginal ||
+        genero != gOriginal ||
+        descricao != dOriginal ||
+        _lido != lidoOriginal ||
+        _avaliacao != avalOriginal ||
+        _dataConclusao != dataOriginal ||
+        _capaFoiAlterada();
+  }
+
+  Future<bool> _confirmarSaidaSemSalvar() async {
+    if (!_editando) return true;
+    if (!_formularioFoiAlterado()) return true;
+    final resultado = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Descartar alterações?'),
+        content: const Text('Você fez edições nos dados deste livro. Tem certeza de que quer sair sem salvar?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Continuar editando'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: const Color(0xFFB3261E)),
+            child: const Text('Sair sem salvar'),
+          ),
+        ],
+      ),
     );
+    return resultado == true;
   }
 
   Future<void> _selecionarData() async {
@@ -94,7 +160,7 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
       }
     } catch (e) {
       if (!mounted) return;
-      _mostrarMensagem('Nao foi possivel selecionar a imagem.');
+      mostrarSnackbarErro(context, 'Nao foi possivel selecionar a imagem.');
     }
   }
 
@@ -116,7 +182,7 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
       }
     } catch (e) {
       if (!mounted) return;
-      _mostrarMensagem('Nao foi possivel tirar a foto.');
+      mostrarSnackbarErro(context, 'Nao foi possivel tirar a foto.');
     }
   }
 
@@ -229,10 +295,11 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
       },
     );
 
+    if (!mounted) return;
     if (resultado == true) {
-      _mostrarMensagem('Capa encontrada!');
+      mostrarSnackbarSucesso(context, 'Capa encontrada!');
     } else if (resultado == false) {
-      _mostrarMensagem('Nenhuma capa foi encontrada para esse título.');
+      mostrarSnackbarAviso(context, 'Nenhuma capa foi encontrada para esse título.');
     }
   }
 
@@ -245,8 +312,7 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
     _generoController = TextEditingController(text: widget.livro['genero']?.toString() ?? '');
     _descricaoController = TextEditingController(text: widget.livro['descricao']?.toString() ?? '');
     _lido = widget.livro['lido'] == true;
-    final aval = widget.livro['avaliacao'];
-    _avaliacao = aval is int ? aval : (aval is double ? aval.toInt() : null);
+    _avaliacao = _avaliacaoOriginal();
     _dataConclusao = parseDataISO(widget.livro['dataConclusao']?.toString());
     final imgOriginal = widget.livro['imagem']?.toString();
     if (imgOriginal != null && imgOriginal.isNotEmpty) {
@@ -277,8 +343,7 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
     _generoController.text = widget.livro['genero']?.toString() ?? '';
     _descricaoController.text = widget.livro['descricao']?.toString() ?? '';
     _lido = widget.livro['lido'] == true;
-    final aval = widget.livro['avaliacao'];
-    _avaliacao = aval is int ? aval : (aval is double ? aval.toInt() : null);
+    _avaliacao = _avaliacaoOriginal();
     _dataConclusao = parseDataISO(widget.livro['dataConclusao']?.toString());
     final imgOriginal = widget.livro['imagem']?.toString();
     _capaBytes = null;
@@ -344,19 +409,19 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         setState(() => _editando = false);
-        _mostrarMensagem('Livro atualizado com sucesso.');
+        mostrarSnackbarSucesso(context, 'Livro atualizado com sucesso.');
         Navigator.pop(context, true);
       } else {
         final mensagem = _mensagemErro(
           response,
           'Nao foi possivel atualizar o livro.',
         );
-        _mostrarMensagem('Erro ao atualizar o livro: $mensagem');
+        mostrarSnackbarErro(context, 'Erro ao atualizar o livro: $mensagem');
       }
     } catch (e) {
       if (!mounted) return;
       setState(() => _salvando = false);
-      _mostrarMensagem('Falha na requisicao. Tente novamente.');
+      mostrarSnackbarErro(context, 'Falha na requisicao. Tente novamente.');
     }
   }
 
@@ -373,7 +438,8 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Deletar', style: TextStyle(color: Colors.red)),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Deletar'),
           ),
         ],
       ),
@@ -400,503 +466,382 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: ShaderMask(
-          shaderCallback: (bounds) => const LinearGradient(
-            colors: [Color(0xFF7C4DFF), Color(0xFFB28CFF)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ).createShader(bounds),
-          blendMode: BlendMode.srcIn,
-          child: Text(
-            _editando ? 'Editar Livro' : 'Detalhes',
-            style: const TextStyle(
-              fontFamily: 'Diphylleia',
-              fontSize: 30,
-              letterSpacing: 0.2,
-              color: Colors.white,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final podeSair = await _confirmarSaidaSemSalvar();
+        if (podeSair && mounted) {
+          if (_editando) {
+            Navigator.of(context).pop(false);
+          } else {
+            Navigator.of(context).pop();
+          }
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: ShaderMask(
+            shaderCallback: (bounds) => const LinearGradient(
+              colors: [Color(0xFF7C4DFF), Color(0xFFB28CFF)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ).createShader(bounds),
+            blendMode: BlendMode.srcIn,
+            child: Text(
+              _editando ? 'Editar Livro' : 'Detalhes',
+              style: const TextStyle(
+                fontFamily: 'Diphylleia',
+                fontSize: 30,
+                letterSpacing: 0.2,
+                color: Colors.white,
+              ),
             ),
           ),
-        ),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        actions: [
-          if (!_editando)
-            IconButton(
-              icon: const Icon(Icons.edit),
-              onPressed: () => setState(() => _editando = true),
-            ),
-          if (!_editando)
-            IconButton(
-              icon: const Icon(Icons.delete, color: Colors.red),
-              onPressed: _deletarLivro,
-            ),
-        ],
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: ListView(
-          children: [
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
+          backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+          actions: [
+            if (!_editando)
+              IconButton(
+                icon: const Icon(Icons.edit),
+                onPressed: () => setState(() => _editando = true),
               ),
-              child: Column(
-                children: [
-                  if (!_editando) ...[
-                    if (widget.livro['imagem'] != null &&
-                        widget.livro['imagem'].toString().isNotEmpty)
-                      () {
-                        final imagemStr = widget.livro['imagem'].toString();
-                        final ehBase64 = imagemStr.startsWith('data:image') || imagemStr.length > 1000;
-                        Widget capaOk;
-                        if (ehBase64) {
-                          try {
-                            Uint8List bytes;
-                            if (imagemStr.startsWith('data:image')) {
-                              final commaIdx = imagemStr.indexOf(',');
-                              final b64 = commaIdx != -1 ? imagemStr.substring(commaIdx + 1) : imagemStr;
-                              bytes = base64Decode(b64);
-                            } else {
-                              bytes = base64Decode(imagemStr);
+            if (!_editando)
+              IconButton(
+                icon: const Icon(Icons.delete, color: Colors.red),
+                onPressed: _deletarLivro,
+              ),
+          ],
+        ),
+        body: Padding(
+          padding: const EdgeInsets.all(16),
+          child: ListView(
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: Column(
+                  children: [
+                    if (!_editando) ...[
+                      if (widget.livro['imagem'] != null &&
+                          widget.livro['imagem'].toString().isNotEmpty)
+                        () {
+                          final imagemStr = widget.livro['imagem'].toString();
+                          final ehBase64 = imagemStr.startsWith('data:image') || imagemStr.length > 1000;
+                          Widget capaOk;
+                          if (ehBase64) {
+                            try {
+                              Uint8List bytes;
+                              if (imagemStr.startsWith('data:image')) {
+                                final commaIdx = imagemStr.indexOf(',');
+                                final b64 = commaIdx != -1 ? imagemStr.substring(commaIdx + 1) : imagemStr;
+                                bytes = base64Decode(b64);
+                              } else {
+                                bytes = base64Decode(imagemStr);
+                              }
+                              capaOk = ClipRRect(
+                                borderRadius: BorderRadius.circular(16),
+                                child: Image.memory(
+                                  bytes,
+                                  height: 220,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, _, _) => Container(
+                                    height: 220,
+                                    width: 150,
+                                    color: const Color(0xFFF1EEFF),
+                                    alignment: Alignment.center,
+                                    child: const Icon(Icons.broken_image, size: 40),
+                                  ),
+                                ),
+                              );
+                            } catch (_) {
+                              capaOk = Container(
+                                height: 220,
+                                width: 150,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF1EEFF),
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: const Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.menu_book_rounded, size: 52, color: Color(0xFF7C4DFF)),
+                                    SizedBox(height: 12),
+                                    Text(
+                                      'Sem capa',
+                                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF5F5F7A)),
+                                    ),
+                                  ],
+                                ),
+                              );
                             }
+                          } else {
                             capaOk = ClipRRect(
                               borderRadius: BorderRadius.circular(16),
-                              child: Image.memory(
-                                bytes,
+                              child: CachedNetworkImage(
+                                imageUrl: imagemStr,
                                 height: 220,
                                 fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => Container(
+                                placeholder: (context, url) => const SizedBox(
+                                  height: 220,
+                                  child: Center(child: CircularProgressIndicator()),
+                                ),
+                                errorWidget: (context, url, error) => Container(
                                   height: 220,
                                   width: 150,
-                                  color: const Color(0xFFF1EEFF),
+                                  color: Colors.grey.shade300,
                                   alignment: Alignment.center,
                                   child: const Icon(Icons.broken_image, size: 40),
                                 ),
                               ),
                             );
-                          } catch (_) {
-                            capaOk = Container(
+                          }
+                          return capaOk;
+                        }()
+                      else
+                        Container(
+                          height: 220,
+                          width: 150,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF1EEFF),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: const Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.menu_book_rounded,
+                                size: 52,
+                                color: Color(0xFF7C4DFF),
+                              ),
+                              SizedBox(height: 12),
+                              Text(
+                                'Sem capa',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF5F5F7A),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ] else ...[
+                      if (_tipoCapa == 'bytes' && _capaBytes != null)
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: Image.memory(
+                            _capaBytes!,
+                            height: 220,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, _, _) => Container(
                               height: 220,
                               width: 150,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF1EEFF),
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              child: const Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.menu_book_rounded, size: 52, color: Color(0xFF7C4DFF)),
-                                  SizedBox(height: 12),
-                                  Text(
-                                    'Sem capa',
-                                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF5F5F7A)),
-                                  ),
-                                ],
-                              ),
-                            );
-                          }
-                        } else {
-                          capaOk = ClipRRect(
-                            borderRadius: BorderRadius.circular(16),
-                            child: CachedNetworkImage(
-                              imageUrl: imagemStr,
+                              color: const Color(0xFFF1EEFF),
+                              alignment: Alignment.center,
+                              child: const Icon(Icons.broken_image, size: 40),
+                            ),
+                          ),
+                        )
+                      else if (_tipoCapa == 'url' && _capaUrlLocal != null)
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: CachedNetworkImage(
+                            imageUrl: _capaUrlLocal!,
+                            height: 220,
+                            fit: BoxFit.cover,
+                            placeholder: (context, url) => const SizedBox(
                               height: 220,
-                              fit: BoxFit.cover,
-                              placeholder: (context, url) => const SizedBox(
-                                height: 220,
-                                child: Center(child: CircularProgressIndicator()),
-                              ),
-                              errorWidget: (context, url, error) => Container(
-                                height: 220,
-                                width: 150,
-                                color: Colors.grey.shade300,
-                                alignment: Alignment.center,
-                                child: const Icon(Icons.broken_image, size: 40),
-                              ),
+                              child: Center(child: CircularProgressIndicator()),
                             ),
-                          );
-                        }
-                        return capaOk;
-                      }()
-                    else
-                      Container(
-                        height: 220,
-                        width: 150,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF1EEFF),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: const Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.menu_book_rounded,
-                              size: 52,
-                              color: Color(0xFF7C4DFF),
+                            errorWidget: (context, url, error) => Container(
+                              height: 220,
+                              width: 150,
+                              color: Colors.grey.shade300,
+                              alignment: Alignment.center,
+                              child: const Icon(Icons.broken_image, size: 40),
                             ),
-                            SizedBox(height: 12),
-                            Text(
-                              'Sem capa',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF5F5F7A),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                  ] else ...[
-                    if (_tipoCapa == 'bytes' && _capaBytes != null)
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: Image.memory(
-                          _capaBytes!,
+                          ),
+                        )
+                      else
+                        Container(
                           height: 220,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(
-                            height: 220,
-                            width: 150,
+                          width: 150,
+                          decoration: BoxDecoration(
                             color: const Color(0xFFF1EEFF),
-                            alignment: Alignment.center,
-                            child: const Icon(Icons.broken_image, size: 40),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: const Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.menu_book_rounded,
+                                size: 52,
+                                color: Color(0xFF7C4DFF),
+                              ),
+                              SizedBox(height: 12),
+                              Text(
+                                'Sem capa',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF5F5F7A),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      )
-                    else if (_tipoCapa == 'url' && _capaUrlLocal != null)
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: CachedNetworkImage(
-                          imageUrl: _capaUrlLocal!,
-                          height: 220,
-                          fit: BoxFit.cover,
-                          placeholder: (context, url) => const SizedBox(
-                            height: 220,
-                            child: Center(child: CircularProgressIndicator()),
-                          ),
-                          errorWidget: (context, url, error) => Container(
-                            height: 220,
-                            width: 150,
-                            color: Colors.grey.shade300,
-                            alignment: Alignment.center,
-                            child: const Icon(Icons.broken_image, size: 40),
-                          ),
-                        ),
-                      )
-                    else
-                      Container(
-                        height: 220,
-                        width: 150,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF1EEFF),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: const Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.menu_book_rounded,
-                              size: 52,
-                              color: Color(0xFF7C4DFF),
-                            ),
-                            SizedBox(height: 12),
-                            Text(
-                              'Sem capa',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF5F5F7A),
+                      const SizedBox(height: 20),
+                      const Text(
+                        'Capa do livro',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF2A2A38)),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Edite a capa: tire uma foto, selecione da galeria ou busque pelo título.',
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: _tirarFotoComCamera,
+                              icon: const Icon(Icons.camera_alt_rounded, size: 16, color: Color(0xFF7C4DFF)),
+                              label: const Text('Câmera', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF7C4DFF))),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
                               ),
                             ),
-                          ],
-                        ),
-                      ),
-                    const SizedBox(height: 20),
-                    const Text(
-                      'Capa do livro',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF2A2A38)),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Edite a capa: tire uma foto, selecione da galeria ou busque pelo título.',
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: _tirarFotoComCamera,
-                            icon: const Icon(Icons.camera_alt_rounded, size: 16, color: Color(0xFF7C4DFF)),
-                            label: const Text('Câmera', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF7C4DFF))),
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
-                            ),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: _selecionarDaGaleria,
-                            icon: const Icon(Icons.image_outlined, size: 16, color: Color(0xFF7C4DFF)),
-                            label: const Text('Galeria', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF7C4DFF))),
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: _abrirDialogBuscarCapa,
-                            icon: const Icon(Icons.search_rounded, size: 16, color: Color(0xFF7C4DFF)),
-                            label: const Text('Buscar', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF7C4DFF))),
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (_tipoCapa != null) ...[
-                      const SizedBox(height: 12),
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          onPressed: _removerCapa,
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFFB3261E),
-                            side: const BorderSide(color: Color(0xFFB3261E)),
-                          ),
-                          icon: const Icon(Icons.close_rounded, size: 18),
-                          label: const Text('Remover capa'),
-                        ),
-                      ),
-                    ],
-                  ],
-                  const SizedBox(height: 16),
-                  Text(
-                    widget.livro['titulo'] ?? 'Livro sem título',
-                    style: Theme.of(context).textTheme.titleLarge,
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    widget.livro['autor'] ?? 'Autor desconhecido',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 12),
-                  EstrelasAvaliacao(
-                    avaliacao: _editando ? _avaliacao : (widget.livro['avaliacao'] is int ? widget.livro['avaliacao'] : (widget.livro['avaliacao'] is double ? (widget.livro['avaliacao'] as double).toInt() : null)),
-                    tamanho: 28,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _editando ? 'Editar livro' : 'Informações do livro',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    _editando
-                        ? 'Altere os dados abaixo e clique em Salvar para confirmar.'
-                        : 'Veja os dados cadastrados para este livro.',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 20),
-                  if (!_editando) ...[
-                    InfoTile(
-                      label: 'Título',
-                      value: widget.livro['titulo']?.toString(),
-                    ),
-                    InfoTile(
-                      label: 'Autor',
-                      value: widget.livro['autor']?.toString(),
-                    ),
-                    InfoTile(
-                      label: 'Editora',
-                      value: widget.livro['editora']?.toString(),
-                    ),
-                    InfoTile(
-                      label: 'Gênero',
-                      value: widget.livro['genero']?.toString(),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Descrição',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 6),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF8F5FF),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Text(
-                        (widget.livro['descricao']?.toString().trim().isNotEmpty == true)
-                            ? widget.livro['descricao'].toString()
-                            : 'Não informado',
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                              color: const Color(0xFF2A2A38),
-                              height: 1.35,
-                            ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: _lido ? const Color(0xFFE8FAF0) : const Color(0xFFF8F5FF),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: _lido ? const Color(0xFF4CAF50) : Colors.transparent,
-                          width: 1.2,
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            _lido ? Icons.check_circle : Icons.menu_book_outlined,
-                            color: _lido ? const Color(0xFF2E7D32) : const Color(0xFF7C4DFF),
-                            size: 26,
-                          ),
-                          const SizedBox(width: 12),
+                          const SizedBox(width: 8),
                           Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  _lido ? 'Livro lido' : 'Ainda não lido',
-                                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                        fontWeight: FontWeight.w600,
-                                        color: _lido ? const Color(0xFF2E7D32) : const Color(0xFF2A2A38),
-                                      ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  'Altere em "Editar informações".',
-                                  style: Theme.of(context).textTheme.bodyMedium,
-                                ),
-                              ],
+                            child: OutlinedButton.icon(
+                              onPressed: _selecionarDaGaleria,
+                              icon: const Icon(Icons.image_outlined, size: 16, color: Color(0xFF7C4DFF)),
+                              label: const Text('Galeria', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF7C4DFF))),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: _abrirDialogBuscarCapa,
+                              icon: const Icon(Icons.search_rounded, size: 16, color: Color(0xFF7C4DFF)),
+                              label: const Text('Buscar', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF7C4DFF))),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
+                              ),
                             ),
                           ),
                         ],
                       ),
-                    ),
-                    if (_lido && _dataConclusao != null) ...[
-                      const SizedBox(height: 12),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE8FAF0),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: const Color(0xFF4CAF50),
-                            width: 1.2,
+                      if (_tipoCapa != null) ...[
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: _removerCapa,
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFFB3261E),
+                              side: const BorderSide(color: Color(0xFFB3261E)),
+                            ),
+                            icon: const Icon(Icons.close_rounded, size: 18),
+                            label: const Text('Remover capa'),
                           ),
                         ),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.event_available_rounded,
-                              color: Color(0xFF2E7D32),
-                              size: 26,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'Concluído em',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      color: Color(0xFF2E7D32),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    formatarData(_dataConclusao),
-                                    style: Theme.of(context).textTheme.bodyMedium,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                      ],
                     ],
-                    const SizedBox(height: 20),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: () => setState(() => _editando = true),
-                        icon: const Icon(Icons.edit, size: 20),
-                        label: const Text('Editar informações'),
-                      ),
+                    const SizedBox(height: 16),
+                    Text(
+                      widget.livro['titulo'] ?? 'Livro sem título',
+                      style: Theme.of(context).textTheme.titleLarge,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      widget.livro['autor'] ?? 'Autor desconhecido',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+                    EstrelasAvaliacao(
+                      avaliacao: _editando ? _avaliacao : (widget.livro['avaliacao'] is int ? widget.livro['avaliacao'] : (widget.livro['avaliacao'] is double ? (widget.livro['avaliacao'] as double).toInt() : null)),
+                      tamanho: 28,
                     ),
                   ],
-                  if (_editando) ...[
-                    TextFormField(
-                      controller: _tituloController,
-                      decoration: const InputDecoration(labelText: 'Título'),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _editando ? 'Editar livro' : 'Informações do livro',
+                      style: Theme.of(context).textTheme.titleLarge,
                     ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _autorController,
-                      decoration: const InputDecoration(labelText: 'Autor'),
+                    const SizedBox(height: 6),
+                    Text(
+                      _editando
+                          ? 'Altere os dados abaixo e clique em Salvar para confirmar.'
+                          : 'Veja os dados cadastrados para este livro.',
+                      style: Theme.of(context).textTheme.bodyMedium,
                     ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _editoraController,
-                      decoration: const InputDecoration(labelText: 'Editora'),
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _generoController,
-                      decoration: const InputDecoration(labelText: 'Gênero'),
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _descricaoController,
-                      maxLength: 500,
-                      decoration: const InputDecoration(labelText: 'Descrição'),
-                      maxLines: 3,
-                      onChanged: (valor) {
-                        if (valor.length >= 500 && !_jaAvisouLimiteDesc) {
-                          _jaAvisouLimiteDesc = true;
-                          _mostrarMensagem('Limite de caracteres atingido.');
-                        }
-                        if (valor.length < 495) {
-                          _jaAvisouLimiteDesc = false;
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    GestureDetector(
-                      onTap: () => setState(() => _lido = !_lido),
-                      child: Container(
+                    const SizedBox(height: 20),
+                    if (!_editando) ...[
+                      InfoTile(
+                        label: 'Título',
+                        value: widget.livro['titulo']?.toString(),
+                      ),
+                      InfoTile(
+                        label: 'Autor',
+                        value: widget.livro['autor']?.toString(),
+                      ),
+                      InfoTile(
+                        label: 'Editora',
+                        value: widget.livro['editora']?.toString(),
+                      ),
+                      InfoTile(
+                        label: 'Gênero',
+                        value: widget.livro['genero']?.toString(),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Descrição',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 6),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8F5FF),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Text(
+                          (widget.livro['descricao']?.toString().trim().isNotEmpty == true)
+                              ? widget.livro['descricao'].toString()
+                              : 'Não informado',
+                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                color: const Color(0xFF2A2A38),
+                                height: 1.35,
+                              ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Container(
                         width: double.infinity,
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                         decoration: BoxDecoration(
@@ -928,134 +873,269 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    'Clique para alternar.',
+                                    'Altere em "Editar informações".',
                                     style: Theme.of(context).textTheme.bodyMedium,
                                   ),
                                 ],
                               ),
                             ),
-                            const SizedBox(width: 8),
-                            Switch(
-                              value: _lido,
-                              onChanged: (valor) => setState(() => _lido = valor),
-                              activeColor: const Color(0xFF4CAF50),
-                            ),
                           ],
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    if (_lido) ...[
-                      TextFormField(
-                        readOnly: true,
-                        controller: TextEditingController(text: formatarData(_dataConclusao)),
-                        onTap: _selecionarData,
-                        decoration: InputDecoration(
-                          labelText: 'Data de conclusão da leitura',
-                          prefixIcon: const Icon(Icons.calendar_today_rounded, color: Color(0xFF7C4DFF)),
-                          suffixIcon: _dataConclusao != null
-                              ? IconButton(
-                                  icon: const Icon(Icons.close, color: Color(0xFF7C4DFF)),
-                                  onPressed: () => setState(() => _dataConclusao = null),
-                                  tooltip: 'Limpar data',
-                                )
-                              : null,
-                          hintText: 'Clique para selecionar',
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                    ],
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF8F5FF),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
+                      if (_lido && _dataConclusao != null) ...[
+                        const SizedBox(height: 12),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE8FAF0),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: const Color(0xFF4CAF50),
+                              width: 1.2,
+                            ),
+                          ),
+                          child: Row(
                             children: [
-                              const Icon(Icons.star_rate_rounded, color: Color(0xFF7C4DFF)),
+                              const Icon(
+                                Icons.event_available_rounded,
+                                color: Color(0xFF2E7D32),
+                                size: 26,
+                              ),
                               const SizedBox(width: 12),
                               Expanded(
-                                child: Text(
-                                  'Sua avaliação',
-                                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Concluído em',
+                                      style: TextStyle(
                                         fontWeight: FontWeight.w600,
-                                        color: const Color(0xFF2A2A38),
+                                        color: Color(0xFF2E7D32),
                                       ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      formatarData(_dataConclusao),
+                                      style: Theme.of(context).textTheme.bodyMedium,
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 10),
-                          Padding(
-                            padding: const EdgeInsets.only(left: 2),
-                            child: EstrelasAvaliacao(
-                              avaliacao: _avaliacao,
-                              tamanho: 32,
-                              clicavel: true,
-                              aoClicar: (valor) => setState(() => _avaliacao = valor == 0 ? null : valor),
+                        ),
+                      ],
+                      const SizedBox(height: 20),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: () => setState(() => _editando = true),
+                          icon: const Icon(Icons.edit, size: 20),
+                          label: const Text('Editar informações'),
+                        ),
+                      ),
+                    ],
+                    if (_editando) ...[
+                      TextFormField(
+                        controller: _tituloController,
+                        decoration: const InputDecoration(labelText: 'Título'),
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _autorController,
+                        decoration: const InputDecoration(labelText: 'Autor'),
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _editoraController,
+                        decoration: const InputDecoration(labelText: 'Editora'),
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _generoController,
+                        decoration: const InputDecoration(labelText: 'Gênero'),
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _descricaoController,
+                        maxLength: 500,
+                        decoration: const InputDecoration(labelText: 'Descrição'),
+                        maxLines: 3,
+                        onChanged: (valor) {
+                          if (valor.length >= 500 && !_jaAvisouLimiteDesc) {
+                            _jaAvisouLimiteDesc = true;
+                            mostrarSnackbarAviso(context, 'Limite de caracteres atingido.');
+                          }
+                          if (valor.length < 495) {
+                            _jaAvisouLimiteDesc = false;
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      GestureDetector(
+                        onTap: () => setState(() => _lido = !_lido),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: _lido ? const Color(0xFFE8FAF0) : const Color(0xFFF8F5FF),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: _lido ? const Color(0xFF4CAF50) : Colors.transparent,
+                              width: 1.2,
                             ),
                           ),
-                          const SizedBox(height: 6),
-                          Padding(
-                            padding: const EdgeInsets.only(left: 2),
-                            child: Text(
-                              _avaliacao == null || _avaliacao == 0
-                                  ? 'Toque em uma estrela para avaliar (1 a 5).'
-                                  : _avaliacao == 1
-                                      ? '1 estrela. Não gostei muito. 😕'
-                                      : _avaliacao == 2
-                                          ? '2 estrelas. Deixa a desejar. 🫤'
-                                          : _avaliacao == 3
-                                              ? '3 estrelas. Leitura mediana. 🙂'
-                                              : _avaliacao == 4
-                                                  ? '4 estrelas! Muito bom! 🥰'
-                                                  : '5 estrelas! Livro incrível! 😍',
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: const Color(0xFF6B6B80),
+                          child: Row(
+                            children: [
+                              Icon(
+                                _lido ? Icons.check_circle : Icons.menu_book_outlined,
+                                color: _lido ? const Color(0xFF2E7D32) : const Color(0xFF7C4DFF),
+                                size: 26,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      _lido ? 'Livro lido' : 'Ainda não lido',
+                                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                            fontWeight: FontWeight.w600,
+                                            color: _lido ? const Color(0xFF2E7D32) : const Color(0xFF2A2A38),
+                                          ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'Clique para alternar.',
+                                      style: Theme.of(context).textTheme.bodyMedium,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Switch(
+                                value: _lido,
+                                onChanged: (valor) => setState(() => _lido = valor),
+                                activeThumbColor: const Color(0xFF4CAF50),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      if (_lido) ...[
+                        TextFormField(
+                          readOnly: true,
+                          controller: TextEditingController(text: formatarData(_dataConclusao)),
+                          onTap: _selecionarData,
+                          decoration: InputDecoration(
+                            labelText: 'Data de conclusão da leitura',
+                            prefixIcon: const Icon(Icons.calendar_today_rounded, color: Color(0xFF7C4DFF)),
+                            suffixIcon: _dataConclusao != null
+                                ? IconButton(
+                                    icon: const Icon(Icons.close, color: Color(0xFF7C4DFF)),
+                                    onPressed: () => setState(() => _dataConclusao = null),
+                                    tooltip: 'Limpar data',
+                                  )
+                                : null,
+                            hintText: 'Clique para selecionar',
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8F5FF),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.star_rate_rounded, color: Color(0xFF7C4DFF)),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    'Sua avaliação',
+                                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                          fontWeight: FontWeight.w600,
+                                          color: const Color(0xFF2A2A38),
+                                        ),
                                   ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            Padding(
+                              padding: const EdgeInsets.only(left: 2),
+                              child: EstrelasAvaliacao(
+                                avaliacao: _avaliacao,
+                                tamanho: 32,
+                                clicavel: true,
+                                aoClicar: (valor) => setState(() => _avaliacao = valor == 0 ? null : valor),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Padding(
+                              padding: const EdgeInsets.only(left: 2),
+                              child: Text(
+                                _avaliacao == null || _avaliacao == 0
+                                    ? 'Toque em uma estrela para avaliar (1 a 5).'
+                                    : _avaliacao == 1
+                                        ? '1 estrela. Não gostei muito. 😕'
+                                        : _avaliacao == 2
+                                            ? '2 estrelas. Deixa a desejar. 🫤'
+                                            : _avaliacao == 3
+                                                ? '3 estrelas. Leitura mediana. 🙂'
+                                                : _avaliacao == 4
+                                                    ? '4 estrelas! Muito bom! 🥰'
+                                                    : '5 estrelas! Livro incrível! 😍',
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: const Color(0xFF6B6B80),
+                                    ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: _salvando ? null : _cancelarEdicao,
+                              child: const Text('Cancelar'),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            flex: 2,
+                            child: ElevatedButton(
+                              onPressed: _salvando ? null : _salvarEdicao,
+                              child: _salvando
+                                  ? const SizedBox(
+                                      width: 22,
+                                      height: 22,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2.4,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : const Text('Salvar alterações'),
                             ),
                           ),
                         ],
                       ),
-                    ),
-                    const SizedBox(height: 24),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: _salvando ? null : _cancelarEdicao,
-                            child: const Text('Cancelar'),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          flex: 2,
-                          child: ElevatedButton(
-                            onPressed: _salvando ? null : _salvarEdicao,
-                            child: _salvando
-                                ? const SizedBox(
-                                    width: 22,
-                                    height: 22,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2.4,
-                                      color: Colors.white,
-                                    ),
-                                  )
-                                : const Text('Salvar alterações'),
-                          ),
-                        ),
-                      ],
-                    ),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

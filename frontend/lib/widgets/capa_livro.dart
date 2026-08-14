@@ -49,7 +49,7 @@ class CapaLivro extends StatelessWidget {
               width: 56,
               height: 82,
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => capaSemImagem(),
+              errorBuilder: (_, _, _) => capaSemImagem(),
             ),
           );
         } catch (_) {
