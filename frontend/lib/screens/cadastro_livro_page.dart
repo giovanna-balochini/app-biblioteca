@@ -5,6 +5,8 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:frontend/services/google_books_service.dart';
+import 'package:frontend/widgets/estrelas_avaliacao.dart';
+import 'package:frontend/utils/formatters.dart';
 
 class CadastroLivroPage extends StatefulWidget {
   const CadastroLivroPage({super.key});
@@ -31,40 +33,13 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
   int? _avaliacao;
   DateTime? _dataConclusao;
   Uint8List? _capaBytes;
-  String? _tipoCapa; // 'url' ou 'bytes'
+  String? _tipoCapa;
   final ImagePicker _imagePicker = ImagePicker();
 
   void _mostrarMensagem(String mensagem) {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(mensagem)));
-  }
-
-  String _formatarData(DateTime? data) {
-    if (data == null) return '';
-    final dia = data.day.toString().padLeft(2, '0');
-    final mes = data.month.toString().padLeft(2, '0');
-    final ano = data.year.toString();
-    return '$dia/$mes/$ano';
-  }
-
-  String _formatarDataISO(DateTime? data) {
-    if (data == null) return '';
-    final dia = data.day.toString().padLeft(2, '0');
-    final mes = data.month.toString().padLeft(2, '0');
-    final ano = data.year.toString();
-    return '$ano-$mes-$dia';
-  }
-
-  DateTime? _parseDataISO(String? dataStr) {
-    if (dataStr == null || dataStr.trim().isEmpty) return null;
-    try {
-      final partes = dataStr.trim().split('-');
-      if (partes.length != 3) return null;
-      return DateTime(int.parse(partes[0]), int.parse(partes[1]), int.parse(partes[2]));
-    } catch (_) {
-      return null;
-    }
   }
 
   Future<void> _selecionarData() async {
@@ -84,35 +59,6 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
     if (data != null) {
       setState(() => _dataConclusao = data);
     }
-  }
-
-  Widget _buildEstrelas(int? avaliacao, {double tamanho = 16, bool clicavel = false, ValueChanged<int>? aoClicar}) {
-    final qtd = avaliacao ?? 0;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: List.generate(5, (index) {
-        final estrelaNumero = index + 1;
-        final preenchida = estrelaNumero <= qtd;
-        final icone = Icon(
-          preenchida ? Icons.star_rounded : Icons.star_border_rounded,
-          size: tamanho,
-          color: const Color(0xFFFFB300),
-        );
-        if (!clicavel) {
-          return Padding(
-            padding: EdgeInsets.only(right: index == 4 ? 0 : 2),
-            child: icone,
-          );
-        }
-        return GestureDetector(
-          onTap: () => aoClicar?.call(estrelaNumero == qtd ? 0 : estrelaNumero),
-          child: Padding(
-            padding: EdgeInsets.only(right: index == 4 ? 0 : 4),
-            child: icone,
-          ),
-        );
-      }),
-    );
   }
 
   String _mensagemErro(http.Response response, String fallback) {
@@ -340,7 +286,7 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
       'imagem': imagemParaSalvar,
       'lido': _lido,
       'avaliacao': _avaliacao,
-      'dataConclusao': _lido && _dataConclusao != null ? _formatarDataISO(_dataConclusao) : null,
+      'dataConclusao': _lido && _dataConclusao != null ? formatarDataISO(_dataConclusao) : null,
     };
 
     try {
@@ -422,13 +368,13 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
                 ),
               ),
             ),
-              const SizedBox(height: 4),
-              Text(
-                'Adicione um novo título à sua biblioteca',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: const Color(0xFF6B6B80),
-                    ),
-              ),
+            const SizedBox(height: 4),
+            Text(
+              'Adicione um novo título à sua biblioteca',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: const Color(0xFF6B6B80),
+                  ),
+            ),
           ],
         ),
         toolbarHeight: 92,
@@ -439,7 +385,6 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
           key: _formKey,
           child: ListView(
             children: [
-              //Preview da capa
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(20),
@@ -570,8 +515,6 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
                 ),
               ),
               const SizedBox(height: 24),
-
-              //Campo título com botão de buscar capa
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(20),
@@ -648,7 +591,7 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
                           _jaAvisouLimiteDesc = false;
                         }
                       },
-                    ),                    
+                    ),
                     const SizedBox(height: 24),
                     GestureDetector(
                       onTap: () => setState(() => _lido = !_lido),
@@ -721,7 +664,7 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
                     if (_lido) ...[
                       TextFormField(
                         readOnly: true,
-                        controller: TextEditingController(text: _formatarData(_dataConclusao)),
+                        controller: TextEditingController(text: formatarData(_dataConclusao)),
                         onTap: _selecionarData,
                         decoration: InputDecoration(
                           labelText: 'Data de conclusão da leitura',
@@ -783,8 +726,8 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
                           const SizedBox(height: 10),
                           Padding(
                             padding: const EdgeInsets.only(left: 2),
-                            child: _buildEstrelas(
-                              _avaliacao,
+                            child: EstrelasAvaliacao(
+                              avaliacao: _avaliacao,
                               tamanho: 32,
                               clicavel: true,
                               aoClicar: (valor) => setState(() => _avaliacao = valor == 0 ? null : valor),
@@ -819,24 +762,24 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
                       child: ElevatedButton(
                         onPressed: _salvando ? null : _salvarLivro,
                         child: _salvando
-                          ? const SizedBox(
-                            height: 22,
-                            width: 22,
-                            child: CircularProgressIndicator(
-                            strokeWidth: 2.4,
-                            color: Colors.white,
-                          ),
-                        )
-                       : const Text('Salvar livro'),                      
+                            ? const SizedBox(
+                                height: 22,
+                                width: 22,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.4,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Text('Salvar livro'),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
-    )
-  );
- }
+    );
+  }
 }
