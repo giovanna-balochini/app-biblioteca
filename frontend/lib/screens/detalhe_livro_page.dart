@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:image_picker/image_picker.dart';
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:frontend/services/google_books_service.dart';
@@ -447,11 +448,69 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
 
     if (confirmar != true) return;
 
-    await http.delete(
-      Uri.parse('http://10.0.2.2:8080/livros/${widget.livro['id']}'),
-    );
+    final livroDeletado = Map<String, dynamic>.from(widget.livro);
+    final livroId = widget.livro['id'];
 
-    if (mounted) Navigator.pop(context, true);
+    bool desfez = false;
+    bool deletouNoBackend = false;
+
+    void executarDelecaoReal() async {
+      if (deletouNoBackend || desfez) return;
+      deletouNoBackend = true;
+      try {
+        await http.delete(
+          Uri.parse('http://10.0.2.2:8080/livros/$livroId'),
+        );
+      } catch (_) {}
+    }
+
+    Navigator.of(context).pop({
+      'deletado': true,
+      'livro': livroDeletado,
+      'adiado': true,
+    });
+
+    final timerDelecao = Timer(const Duration(seconds: 4), () {
+      executarDelecaoReal();
+    });
+
+    Future.delayed(Duration.zero, () {
+      if (!mounted) return;
+      final messenger = ScaffoldMessenger.of(context);
+      messenger
+        ..removeCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
+            margin: const EdgeInsets.fromLTRB(14, 0, 14, 18),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            backgroundColor: const Color(0xFF2B2B33),
+            content: Row(
+              children: [
+                const Icon(Icons.delete_outline_rounded, size: 20, color: Color(0xFFFFB3B3)),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    '"${(livroDeletado['titulo'] ?? 'Livro').toString().length > 32 ? '${(livroDeletado['titulo'] ?? 'Livro').toString().substring(0, 32)}...' : livroDeletado['titulo'] ?? 'Livro'}" foi movido para a lixeira',
+                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            action: SnackBarAction(
+              label: 'DESFAZER',
+              textColor: const Color(0xFFB28CFF),
+              onPressed: () {
+                desfez = true;
+                timerDelecao.cancel();
+              },
+            ),
+          ),
+        );
+    });
   }
 
   @override
@@ -466,6 +525,17 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
 
   @override
   Widget build(BuildContext context) {
+    final tamanhoTela = MediaQuery.of(context).size;
+    final menorLado = tamanhoTela.shortestSide;
+    final telaPequena = menorLado < 360;
+
+    final alturaCapa = (tamanhoTela.height * 0.28).clamp(140.0, 220.0);
+    final larguraCapa = (alturaCapa * 0.68).clamp(100.0, 150.0);
+    final paddingSecao = telaPequena ? const EdgeInsets.all(14) : const EdgeInsets.all(20);
+    final espacamentoSecao = SizedBox(height: telaPequena ? 16 : 24);
+    final espacamentoInterno = SizedBox(height: telaPequena ? 10 : 16);
+    final fonteTituloAppBar = telaPequena ? 24.0 : 30.0;
+
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) async {
@@ -481,20 +551,24 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: ShaderMask(
-            shaderCallback: (bounds) => const LinearGradient(
-              colors: [Color(0xFF7C4DFF), Color(0xFFB28CFF)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ).createShader(bounds),
-            blendMode: BlendMode.srcIn,
-            child: Text(
-              _editando ? 'Editar Livro' : 'Detalhes',
-              style: const TextStyle(
-                fontFamily: 'Diphylleia',
-                fontSize: 30,
-                letterSpacing: 0.2,
-                color: Colors.white,
+          title: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: ShaderMask(
+              shaderCallback: (bounds) => const LinearGradient(
+                colors: [Color(0xFF7C4DFF), Color(0xFFB28CFF)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ).createShader(bounds),
+              blendMode: BlendMode.srcIn,
+              child: Text(
+                _editando ? 'Editar Livro' : 'Detalhes',
+                style: TextStyle(
+                  fontFamily: 'Diphylleia',
+                  fontSize: fonteTituloAppBar,
+                  letterSpacing: 0.2,
+                  color: Colors.white,
+                ),
               ),
             ),
           ),
@@ -513,12 +587,15 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
           ],
         ),
         body: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.symmetric(
+            horizontal: telaPequena ? 12 : 16,
+            vertical: telaPequena ? 10 : 16,
+          ),
           child: ListView(
             children: [
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(20),
+                padding: paddingSecao,
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(24),
@@ -546,11 +623,11 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
                                 borderRadius: BorderRadius.circular(16),
                                 child: Image.memory(
                                   bytes,
-                                  height: 220,
+                                  height: alturaCapa,
                                   fit: BoxFit.cover,
                                   errorBuilder: (_, _, _) => Container(
-                                    height: 220,
-                                    width: 150,
+                                    height: alturaCapa,
+                                    width: larguraCapa,
                                     color: const Color(0xFFF1EEFF),
                                     alignment: Alignment.center,
                                     child: const Icon(Icons.broken_image, size: 40),
@@ -559,20 +636,20 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
                               );
                             } catch (_) {
                               capaOk = Container(
-                                height: 220,
-                                width: 150,
+                                height: alturaCapa,
+                                width: larguraCapa,
                                 decoration: BoxDecoration(
                                   color: const Color(0xFFF1EEFF),
                                   borderRadius: BorderRadius.circular(16),
                                 ),
-                                child: const Column(
+                                child: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Icon(Icons.menu_book_rounded, size: 52, color: Color(0xFF7C4DFF)),
-                                    SizedBox(height: 12),
+                                    Icon(Icons.menu_book_rounded, size: telaPequena ? 42 : 52, color: Color(0xFF7C4DFF)),
+                                    SizedBox(height: telaPequena ? 8 : 12),
                                     Text(
                                       'Sem capa',
-                                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF5F5F7A)),
+                                      style: TextStyle(fontSize: telaPequena ? 14 : 16, fontWeight: FontWeight.w600, color: Color(0xFF5F5F7A)),
                                     ),
                                   ],
                                 ),
@@ -583,15 +660,15 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
                               borderRadius: BorderRadius.circular(16),
                               child: CachedNetworkImage(
                                 imageUrl: imagemStr,
-                                height: 220,
+                                height: alturaCapa,
                                 fit: BoxFit.cover,
-                                placeholder: (context, url) => const SizedBox(
-                                  height: 220,
-                                  child: Center(child: CircularProgressIndicator()),
+                                placeholder: (context, url) => SizedBox(
+                                  height: alturaCapa,
+                                  child: const Center(child: CircularProgressIndicator()),
                                 ),
                                 errorWidget: (context, url, error) => Container(
-                                  height: 220,
-                                  width: 150,
+                                  height: alturaCapa,
+                                  width: larguraCapa,
                                   color: Colors.grey.shade300,
                                   alignment: Alignment.center,
                                   child: const Icon(Icons.broken_image, size: 40),
@@ -603,25 +680,25 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
                         }()
                       else
                         Container(
-                          height: 220,
-                          width: 150,
+                          height: alturaCapa,
+                          width: larguraCapa,
                           decoration: BoxDecoration(
                             color: const Color(0xFFF1EEFF),
                             borderRadius: BorderRadius.circular(16),
                           ),
-                          child: const Column(
+                          child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Icon(
                                 Icons.menu_book_rounded,
-                                size: 52,
+                                size: telaPequena ? 42 : 52,
                                 color: Color(0xFF7C4DFF),
                               ),
-                              SizedBox(height: 12),
+                              SizedBox(height: telaPequena ? 8 : 12),
                               Text(
                                 'Sem capa',
                                 style: TextStyle(
-                                  fontSize: 16,
+                                  fontSize: telaPequena ? 14 : 16,
                                   fontWeight: FontWeight.w600,
                                   color: Color(0xFF5F5F7A),
                                 ),
@@ -635,11 +712,11 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
                           borderRadius: BorderRadius.circular(16),
                           child: Image.memory(
                             _capaBytes!,
-                            height: 220,
+                            height: alturaCapa,
                             fit: BoxFit.cover,
                             errorBuilder: (_, _, _) => Container(
-                              height: 220,
-                              width: 150,
+                              height: alturaCapa,
+                              width: larguraCapa,
                               color: const Color(0xFFF1EEFF),
                               alignment: Alignment.center,
                               child: const Icon(Icons.broken_image, size: 40),
@@ -651,15 +728,15 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
                           borderRadius: BorderRadius.circular(16),
                           child: CachedNetworkImage(
                             imageUrl: _capaUrlLocal!,
-                            height: 220,
+                            height: alturaCapa,
                             fit: BoxFit.cover,
-                            placeholder: (context, url) => const SizedBox(
-                              height: 220,
-                              child: Center(child: CircularProgressIndicator()),
+                            placeholder: (context, url) => SizedBox(
+                              height: alturaCapa,
+                              child: const Center(child: CircularProgressIndicator()),
                             ),
                             errorWidget: (context, url, error) => Container(
-                              height: 220,
-                              width: 150,
+                              height: alturaCapa,
+                              width: larguraCapa,
                               color: Colors.grey.shade300,
                               alignment: Alignment.center,
                               child: const Icon(Icons.broken_image, size: 40),
@@ -668,25 +745,25 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
                         )
                       else
                         Container(
-                          height: 220,
-                          width: 150,
+                          height: alturaCapa,
+                          width: larguraCapa,
                           decoration: BoxDecoration(
                             color: const Color(0xFFF1EEFF),
                             borderRadius: BorderRadius.circular(16),
                           ),
-                          child: const Column(
+                          child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Icon(
                                 Icons.menu_book_rounded,
-                                size: 52,
+                                size: telaPequena ? 42 : 52,
                                 color: Color(0xFF7C4DFF),
                               ),
-                              SizedBox(height: 12),
+                              SizedBox(height: telaPequena ? 8 : 12),
                               Text(
                                 'Sem capa',
                                 style: TextStyle(
-                                  fontSize: 16,
+                                  fontSize: telaPequena ? 14 : 16,
                                   fontWeight: FontWeight.w600,
                                   color: Color(0xFF5F5F7A),
                                 ),
@@ -694,53 +771,89 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
                             ],
                           ),
                         ),
-                      const SizedBox(height: 20),
-                      const Text(
+                      espacamentoInterno,
+                      Text(
                         'Capa do livro',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF2A2A38)),
+                        style: TextStyle(fontSize: telaPequena ? 16 : 18, fontWeight: FontWeight.w700, color: Color(0xFF2A2A38)),
+                        textAlign: TextAlign.center,
                       ),
-                      const SizedBox(height: 8),
+                      SizedBox(height: telaPequena ? 6 : 8),
                       const Text(
                         'Edite a capa: tire uma foto, selecione da galeria ou busque pelo título.',
                         textAlign: TextAlign.center,
                       ),
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: _tirarFotoComCamera,
-                              icon: const Icon(Icons.camera_alt_rounded, size: 16, color: Color(0xFF7C4DFF)),
-                              label: const Text('Câmera', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF7C4DFF))),
-                              style: OutlinedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
+                      espacamentoInterno,
+                      if (telaPequena)
+                        Column(
+                          children: [
+                            SizedBox(
+                              width: double.infinity,
+                              height: 52,
+                              child: OutlinedButton.icon(
+                                onPressed: _tirarFotoComCamera,
+                                icon: const Icon(Icons.camera_alt_rounded, size: 16, color: Color(0xFF7C4DFF)),
+                                label: const Text('Câmera', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF7C4DFF))),
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: _selecionarDaGaleria,
-                              icon: const Icon(Icons.image_outlined, size: 16, color: Color(0xFF7C4DFF)),
-                              label: const Text('Galeria', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF7C4DFF))),
-                              style: OutlinedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              width: double.infinity,
+                              height: 52,
+                              child: OutlinedButton.icon(
+                                onPressed: _selecionarDaGaleria,
+                                icon: const Icon(Icons.image_outlined, size: 16, color: Color(0xFF7C4DFF)),
+                                label: const Text('Galeria', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF7C4DFF))),
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: _abrirDialogBuscarCapa,
-                              icon: const Icon(Icons.search_rounded, size: 16, color: Color(0xFF7C4DFF)),
-                              label: const Text('Buscar', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF7C4DFF))),
-                              style: OutlinedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              width: double.infinity,
+                              height: 52,
+                              child: OutlinedButton.icon(
+                                onPressed: _abrirDialogBuscarCapa,
+                                icon: const Icon(Icons.search_rounded, size: 16, color: Color(0xFF7C4DFF)),
+                                label: const Text('Buscar', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF7C4DFF))),
                               ),
                             ),
-                          ),
-                        ],
-                      ),
+                          ],
+                        )
+                      else
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: _tirarFotoComCamera,
+                                icon: const Icon(Icons.camera_alt_rounded, size: 16, color: Color(0xFF7C4DFF)),
+                                label: const Text('Câmera', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF7C4DFF))),
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: _selecionarDaGaleria,
+                                icon: const Icon(Icons.image_outlined, size: 16, color: Color(0xFF7C4DFF)),
+                                label: const Text('Galeria', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF7C4DFF))),
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: _abrirDialogBuscarCapa,
+                                icon: const Icon(Icons.search_rounded, size: 16, color: Color(0xFF7C4DFF)),
+                                label: const Text('Buscar', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF7C4DFF))),
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       if (_tipoCapa != null) ...[
                         const SizedBox(height: 12),
                         SizedBox(
@@ -757,30 +870,40 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
                         ),
                       ],
                     ],
-                    const SizedBox(height: 16),
-                    Text(
-                      widget.livro['titulo'] ?? 'Livro sem título',
-                      style: Theme.of(context).textTheme.titleLarge,
-                      textAlign: TextAlign.center,
+                    espacamentoInterno,
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Text(
+                        widget.livro['titulo'] ?? 'Livro sem título',
+                        style: Theme.of(context).textTheme.titleLarge,
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      widget.livro['autor'] ?? 'Autor desconhecido',
-                      style: Theme.of(context).textTheme.bodyMedium,
-                      textAlign: TextAlign.center,
+                    SizedBox(height: telaPequena ? 4 : 6),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Text(
+                        widget.livro['autor'] ?? 'Autor desconhecido',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                    const SizedBox(height: 12),
+                    SizedBox(height: telaPequena ? 10 : 12),
                     EstrelasAvaliacao(
                       avaliacao: _editando ? _avaliacao : (widget.livro['avaliacao'] is int ? widget.livro['avaliacao'] : (widget.livro['avaliacao'] is double ? (widget.livro['avaliacao'] as double).toInt() : null)),
-                      tamanho: 28,
+                      tamanho: telaPequena ? 24 : 28,
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 24),
+              espacamentoSecao,
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(20),
+                padding: paddingSecao,
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(24),
@@ -792,14 +915,14 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
                       _editando ? 'Editar livro' : 'Informações do livro',
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
-                    const SizedBox(height: 6),
+                    SizedBox(height: telaPequena ? 4 : 6),
                     Text(
                       _editando
                           ? 'Altere os dados abaixo e clique em Salvar para confirmar.'
                           : 'Veja os dados cadastrados para este livro.',
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
-                    const SizedBox(height: 20),
+                    espacamentoInterno,
                     if (!_editando) ...[
                       InfoTile(
                         label: 'Título',
@@ -1023,7 +1146,7 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 16),
+                      espacamentoInterno,
                       if (_lido) ...[
                         TextFormField(
                           readOnly: true,
@@ -1042,11 +1165,11 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
                             hintText: 'Clique para selecionar',
                           ),
                         ),
-                        const SizedBox(height: 16),
+                        espacamentoInterno,
                       ],
                       Container(
                         width: double.infinity,
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                        padding: EdgeInsets.symmetric(horizontal: 14, vertical: telaPequena ? 12 : 14),
                         decoration: BoxDecoration(
                           color: const Color(0xFFF8F5FF),
                           borderRadius: BorderRadius.circular(14),
@@ -1074,7 +1197,7 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
                               padding: const EdgeInsets.only(left: 2),
                               child: EstrelasAvaliacao(
                                 avaliacao: _avaliacao,
-                                tamanho: 32,
+                                tamanho: telaPequena ? 28 : 32,
                                 clicavel: true,
                                 aoClicar: (valor) => setState(() => _avaliacao = valor == 0 ? null : valor),
                               ),
@@ -1102,34 +1225,66 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
                           ],
                         ),
                       ),
-                      const SizedBox(height: 24),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: _salvando ? null : _cancelarEdicao,
-                              child: const Text('Cancelar'),
+                      espacamentoSecao,
+                      if (telaPequena)
+                        Column(
+                          children: [
+                            SizedBox(
+                              width: double.infinity,
+                              height: 52,
+                              child: OutlinedButton(
+                                onPressed: _salvando ? null : _cancelarEdicao,
+                                child: const Text('Cancelar'),
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            flex: 2,
-                            child: ElevatedButton(
-                              onPressed: _salvando ? null : _salvarEdicao,
-                              child: _salvando
-                                  ? const SizedBox(
-                                      width: 22,
-                                      height: 22,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2.4,
-                                        color: Colors.white,
-                                      ),
-                                    )
-                                  : const Text('Salvar alterações'),
+                            const SizedBox(height: 10),
+                            SizedBox(
+                              width: double.infinity,
+                              height: 52,
+                              child: ElevatedButton(
+                                onPressed: _salvando ? null : _salvarEdicao,
+                                child: _salvando
+                                    ? const SizedBox(
+                                        width: 22,
+                                        height: 22,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2.4,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : const Text('Salvar alterações'),
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
+                          ],
+                        )
+                      else
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: _salvando ? null : _cancelarEdicao,
+                                child: const Text('Cancelar'),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              flex: 2,
+                              child: ElevatedButton(
+                                onPressed: _salvando ? null : _salvarEdicao,
+                                child: _salvando
+                                    ? const SizedBox(
+                                        width: 22,
+                                        height: 22,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2.4,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : const Text('Salvar alterações'),
+                              ),
+                            ),
+                          ],
+                        ),
                     ],
                   ],
                 ),

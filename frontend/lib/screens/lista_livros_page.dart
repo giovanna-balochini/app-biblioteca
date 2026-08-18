@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:async';
+import 'package:frontend/main.dart' show themeService;
 import 'package:frontend/screens/cadastro_livro_page.dart';
 import 'package:frontend/screens/detalhe_livro_page.dart';
 import 'package:frontend/widgets/estrelas_avaliacao.dart';
@@ -619,6 +620,31 @@ class _ListaLivrosPageState extends State<ListaLivrosPage> {
           ],
         ),
         toolbarHeight: 92,
+        actions: [
+          ListenableBuilder(
+            listenable: themeService,
+            builder: (context, _) {
+              final escuro = themeService.temaEscuro;
+              return IconButton(
+                tooltip: escuro ? 'Alternar para tema claro' : 'Alternar para tema escuro',
+                onPressed: () async {
+                  await themeService.alternarTema();
+                },
+                icon: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 280),
+                  switchInCurve: Curves.easeOutBack,
+                  switchOutCurve: Curves.easeInBack,
+                  transitionBuilder: (child, anim) =>
+                      RotationTransition(turns: anim, child: ScaleTransition(scale: anim, child: child)),
+                  child: escuro
+                      ? const Icon(Icons.light_mode_rounded, key: ValueKey('light'), color: Color(0xFFFFD964))
+                      : const Icon(Icons.dark_mode_rounded, key: ValueKey('dark'), color: Color(0xFF3B3B50)),
+                ),
+              );
+            },
+          ),
+          const SizedBox(width: 4),
+        ],
       ),
       body: carregando
           ? const Center(child: CircularProgressIndicator())
@@ -946,6 +972,74 @@ class _ListaLivrosPageState extends State<ListaLivrosPage> {
                                         _buscaController.clear();
                                         _debounceBusca?.cancel();
                                         buscarLivros();
+                                      } else if (resultado is Map &&
+                                          resultado['deletado'] == true &&
+                                          resultado['adiado'] == true &&
+                                          resultado['livro'] is Map) {
+                                        final livroDeletado = resultado['livro'] as Map;
+                                        final livroId = livroDeletado['id'];
+
+                                        final idxTodos = livros.indexWhere((l) =>
+                                            (l['id'] != null ? l['id'].toString() : '') ==
+                                            (livroId != null ? livroId.toString() : ''));
+                                        final snapshotTodos = List<dynamic>.from(livros);
+
+                                        if (idxTodos != -1) {
+                                          setState(() {
+                                            livros.removeAt(idxTodos);
+                                            final idxFiltradosAtual = _livrosFiltrados.indexWhere((l) =>
+                                                (l['id'] != null ? l['id'].toString() : '') ==
+                                                (livroId != null ? livroId.toString() : ''));
+                                            if (idxFiltradosAtual != -1) _livrosFiltrados.removeAt(idxFiltradosAtual);
+                                            final qtdExibir = _livrosPaginados.length.clamp(0, _livrosFiltrados.length);
+                                            _livrosPaginados = qtdExibir == 0
+                                                ? List<dynamic>.from(_livrosFiltrados)
+                                                : List<dynamic>.from(_livrosFiltrados.sublist(0, qtdExibir));
+                                            _temMaisParaCarregar = _livrosPaginados.length < _livrosFiltrados.length;
+                                          });
+                                        }
+
+                                        if (!mounted) return;
+                                        ScaffoldMessenger.of(context)
+                                          ..removeCurrentSnackBar()
+                                          ..showSnackBar(
+                                            SnackBar(
+                                              behavior: SnackBarBehavior.floating,
+                                              duration: const Duration(seconds: 4),
+                                              margin: const EdgeInsets.fromLTRB(14, 0, 14, 18),
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                              backgroundColor: const Color(0xFF2B2B33),
+                                              content: Row(
+                                                children: [
+                                                  const Icon(Icons.delete_outline_rounded, size: 20, color: Color(0xFFFFB3B3)),
+                                                  const SizedBox(width: 10),
+                                                  Expanded(
+                                                    child: Text(
+                                                      '"${(livroDeletado['titulo'] ?? 'Livro').toString().length > 32 ? '${(livroDeletado['titulo'] ?? 'Livro').toString().substring(0, 32)}...' : livroDeletado['titulo'] ?? 'Livro'}" removido da biblioteca',
+                                                      style: const TextStyle(color: Colors.white, fontSize: 14),
+                                                      maxLines: 2,
+                                                      overflow: TextOverflow.ellipsis,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                              action: SnackBarAction(
+                                                label: 'DESFAZER',
+                                                textColor: const Color(0xFFB28CFF),
+                                                onPressed: () {
+                                                  if (idxTodos != -1 && mounted) {
+                                                    setState(() {
+                                                      livros = snapshotTodos;
+                                                    });
+                                                    _filtrarLivros(
+                                                      _buscaController.text,
+                                                      resetarPagina: true,
+                                                    );
+                                                  }
+                                                },
+                                              ),
+                                            ),
+                                          );
                                       }
                                     },
                                   ),
