@@ -2,7 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'services/theme_service.dart';
-import 'screens/lista_livros_page.dart';
+import 'services/notificacao_service.dart';
+import 'services/lembrete_leitura_service.dart';
+import 'services/auth_service.dart';
+import 'screens/login_page.dart';
+import 'home_wrapper.dart';
 
 ThemeService _themeService = ThemeService();
 
@@ -11,7 +15,10 @@ ThemeService get themeService => _themeService;
 Future<void> main() async {
   final widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
   FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
+  await NotificacaoService.inicializar();
+  await AuthService.inicializar();
   await _themeService.carregarPreferencia();
+  await lembreteLeituraService.carregarPreferencias();
   runApp(const MyApp());
 }
 
@@ -55,7 +62,7 @@ class _MyAppState extends State<MyApp> {
           home: child,
         );
       },
-      child: const ListaLivrosPage(),
+      child: AuthService.estaLogado ? const HomeWrapper() : const LoginPage(),
     );
   }
 }

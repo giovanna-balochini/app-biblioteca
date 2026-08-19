@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:async';
 import 'package:frontend/main.dart' show themeService;
+import 'package:frontend/services/auth_service.dart';
+import 'package:frontend/services/lembrete_leitura_service.dart' show lembreteLeituraService;
 import 'package:frontend/screens/cadastro_livro_page.dart';
 import 'package:frontend/screens/detalhe_livro_page.dart';
+import 'package:frontend/screens/login_page.dart';
 import 'package:frontend/widgets/estrelas_avaliacao.dart';
 import 'package:frontend/widgets/capa_livro.dart';
 import 'package:frontend/utils/formatters.dart';
@@ -82,9 +84,7 @@ class _ListaLivrosPageState extends State<ListaLivrosPage> {
   }
 
   Future<void> buscarLivros() async {
-    final response = await http.get(
-      Uri.parse('http://10.0.2.2:8080/livros'),
-    );
+    final response = await AuthService.get('/livros');
 
     if (response.statusCode == 200) {
       setState(() {
@@ -92,6 +92,13 @@ class _ListaLivrosPageState extends State<ListaLivrosPage> {
         carregando = false;
       });
       _aplicarFiltros(resetarPagina: true);
+    } else if (response.statusCode == 401 || response.statusCode == 403) {
+      await AuthService.logout();
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const LoginPage()),
+        (_) => false,
+      );
     }
   }
 
@@ -254,6 +261,378 @@ class _ListaLivrosPageState extends State<ListaLivrosPage> {
               ],
             ),
           ),
+        );
+      },
+    );
+  }
+
+  static const List<Map<String, dynamic>> _diasSemana = [
+    {'rotulo': 'D', 'dia': DateTime.sunday},
+    {'rotulo': 'S', 'dia': DateTime.monday},
+    {'rotulo': 'T', 'dia': DateTime.tuesday},
+    {'rotulo': 'Q', 'dia': DateTime.wednesday},
+    {'rotulo': 'Q', 'dia': DateTime.thursday},
+    {'rotulo': 'S', 'dia': DateTime.friday},
+    {'rotulo': 'S', 'dia': DateTime.saturday},
+  ];
+
+  String _nomeDiaCompleto(int dia) {
+    return switch (dia) {
+      DateTime.monday => 'Seg',
+      DateTime.tuesday => 'Ter',
+      DateTime.wednesday => 'Qua',
+      DateTime.thursday => 'Qui',
+      DateTime.friday => 'Sex',
+      DateTime.saturday => 'Sáb',
+      _ => 'Dom',
+    };
+  }
+
+  String _proximoLembreteTexto(TimeOfDay horario, List<int> dias) {
+    if (dias.isEmpty) return 'Nenhum dia selecionado';
+    final agora = DateTime.now();
+    int? proxDia;
+    for (int i = 0; i < 7; i++) {
+      final diaCandidato = agora.weekday + i;
+      final diaNormalizado = ((diaCandidato - 1) % 7) + 1;
+      final dataCandidata = DateTime(agora.year, agora.month, agora.day + i, horario.hour, horario.minute);
+      final cairAgora = i == 0 ? dataCandidata.isAfter(agora) : true;
+      if (dias.contains(diaNormalizado) && cairAgora) {
+        proxDia = diaNormalizado;
+        break;
+      }
+    }
+    proxDia ??= dias.first;
+    final minuto = horario.minute.toString().padLeft(2, '0');
+    return 'Próximo lembrete: ${_nomeDiaCompleto(proxDia)} às ${horario.hour}:$minuto';
+  }
+
+  Future<void> _abrirConfiguracoesLembrete(BuildContext context) async {
+    final tema = Theme.of(context);
+    final escuro = tema.brightness == Brightness.dark;
+    final corPrimaria = const Color(0xFF7C4DFF);
+    final corCard = escuro ? const Color(0xFF1C1C27) : Colors.white;
+    final corBorda = escuro ? const Color(0xFF2B2B38) : const Color(0xFFE7E7F1);
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: tema.scaffoldBackgroundColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return ListenableBuilder(
+              listenable: lembreteLeituraService,
+              builder: (context, _) {
+                final ligado = lembreteLeituraService.ligado;
+                final horario = lembreteLeituraService.horario;
+                final dias = List<int>.from(lembreteLeituraService.dias);
+
+                return SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Center(
+                          child: Container(
+                            width: 42,
+                            height: 5,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(999),
+                              color: escuro
+                                  ? const Color(0xFF3C3C4E)
+                                  : const Color(0xFFDFDFEA),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        Row(
+                          children: [
+                            Icon(
+                              ligado
+                                  ? Icons.notifications_active_rounded
+                                  : Icons.notifications_none_rounded,
+                              size: 22,
+                              color: corPrimaria,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'Lembrete de leitura',
+                                style: tema.textTheme.titleLarge,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Configure quando quer ser lembrado de ler',
+                          style: tema.textTheme.bodyMedium,
+                        ),
+                        const SizedBox(height: 20),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: corCard,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: corBorda),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Lembretes ativos',
+                                        style: tema.textTheme.titleLarge
+                                            ?.copyWith(fontSize: 16)),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      ligado
+                                          ? 'Você receberá notificações nos dias selecionados'
+                                          : 'Os lembretes estão desativados',
+                                      style: tema.textTheme.bodyMedium,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Switch.adaptive(
+                                value: ligado,
+                                activeTrackColor:
+                                    corPrimaria.withValues(alpha: 0.35),
+                                thumbColor: WidgetStatePropertyAll(ligado ? corPrimaria : null),
+                                onChanged: (v) async {
+                                  await lembreteLeituraService.atualizar(
+                                      ligado: v);
+                                  if (v &&
+                                      context.mounted) {
+                                    mostrarSnackbarInfo(context,
+                                        'Lembretes ativados! Você receberá notificações.');
+                                  }
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        InkWell(
+                          borderRadius: BorderRadius.circular(16),
+                          onTap: () async {
+                            final novo = await showTimePicker(
+                              context: context,
+                              initialTime: horario,
+                              builder: (ctx, child) {
+                                return Theme(
+                                  data: tema.copyWith(
+                                    colorScheme: tema.colorScheme.copyWith(
+                                      primary: corPrimaria,
+                                    ),
+                                  ),
+                                  child: child ?? const SizedBox.shrink(),
+                                );
+                              },
+                            );
+                            if (novo != null && context.mounted) {
+                              await lembreteLeituraService.atualizar(
+                                  horario: novo);
+                              mostrarSnackbarInfo(context,
+                                  'Horário atualizado para ${novo.hour}:${novo.minute.toString().padLeft(2, '0')}');
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 14),
+                            decoration: BoxDecoration(
+                              color: corCard,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: corBorda),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 42,
+                                  height: 42,
+                                  decoration: BoxDecoration(
+                                    color: corPrimaria.withValues(alpha: 0.14),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: Icon(Icons.schedule_rounded,
+                                      color: corPrimaria, size: 22),
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text('Horário do lembrete',
+                                          style: tema.textTheme.titleLarge
+                                              ?.copyWith(fontSize: 16)),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        horario.format(context),
+                                        style: tema.textTheme.bodyMedium
+                                            ?.copyWith(
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Icon(Icons.chevron_right_rounded,
+                                    size: 22,
+                                    color: escuro
+                                        ? const Color(0xFF9C9CB5)
+                                        : const Color(0xFF8A8A9D)),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        Container(
+                          padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+                          decoration: BoxDecoration(
+                            color: corCard,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: corBorda),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Repetir nos dias',
+                                  style: tema.textTheme.titleLarge
+                                      ?.copyWith(fontSize: 16)),
+                              const SizedBox(height: 12),
+                              Wrap(
+                                alignment: WrapAlignment.spaceBetween,
+                                spacing: 6,
+                                children:
+                                    _diasSemana.map((mapa) {
+                                  final int dia = mapa['dia'];
+                                  final bool selecionado = dias.contains(dia);
+                                  return GestureDetector(
+                                    onTap: () async {
+                                      final novaLista =
+                                          List<int>.from(dias);
+                                      if (selecionado) {
+                                        if (novaLista.length > 1) {
+                                          novaLista.remove(dia);
+                                        } else {
+                                          mostrarSnackbarAviso(context,
+                                              'Selecione pelo menos um dia!');
+                                          return;
+                                        }
+                                      } else {
+                                        novaLista.add(dia);
+                                      }
+                                      novaLista.sort();
+                                      await lembreteLeituraService.atualizar(
+                                          dias: novaLista);
+                                    },
+                                    child: AnimatedContainer(
+                                      duration: const Duration(
+                                          milliseconds: 200),
+                                      curve: Curves.easeOut,
+                                      width: 40,
+                                      height: 40,
+                                      decoration: BoxDecoration(
+                                        color: selecionado
+                                            ? corPrimaria
+                                            : (escuro
+                                                ? const Color(0xFF2A2A37)
+                                                : const Color(0xFFF3F3FB)),
+                                        borderRadius:
+                                            BorderRadius.circular(10),
+                                        border: Border.all(
+                                          color: selecionado
+                                              ? corPrimaria
+                                              : corBorda,
+                                          width: 1.2,
+                                        ),
+                                        boxShadow: selecionado
+                                            ? [
+                                                BoxShadow(
+                                                  color: corPrimaria
+                                                      .withValues(alpha: 0.25),
+                                                  blurRadius: 8,
+                                                  offset:
+                                                      const Offset(0, 3),
+                                                ),
+                                              ]
+                                            : null,
+                                      ),
+                                      alignment: Alignment.center,
+                                      child: Text(
+                                        mapa['rotulo'],
+                                        style: tema.textTheme.bodyLarge
+                                            ?.copyWith(
+                                          fontWeight: FontWeight.w800,
+                                          color: selecionado
+                                              ? Colors.white
+                                              : (escuro
+                                                  ? const Color(0xFFC7C7D9)
+                                                  : const Color(0xFF5A5A6A)),
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                              const SizedBox(height: 12),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 9),
+                                decoration: BoxDecoration(
+                                  color: corPrimaria.withValues(alpha: escuro ? 0.16 : 0.08),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      ligado
+                                          ? Icons.info_outline_rounded
+                                          : Icons.info_rounded,
+                                      size: 16,
+                                      color: corPrimaria,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        ligado
+                                            ? _proximoLembreteTexto(horario, dias)
+                                            : 'Ative os lembretes para começar',
+                                        style: tema.textTheme.bodyMedium
+                                            ?.copyWith(
+                                          fontWeight: FontWeight.w600,
+                                          color: corPrimaria,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                        maxLines: 1,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        SizedBox(height: MediaQuery.viewInsetsOf(context).bottom + 16),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            );
+          },
         );
       },
     );
@@ -621,6 +1000,23 @@ class _ListaLivrosPageState extends State<ListaLivrosPage> {
         ),
         toolbarHeight: 92,
         actions: [
+          ListenableBuilder(
+            listenable: lembreteLeituraService,
+            builder: (context, _) {
+              return IconButton(
+                icon: Icon(
+                  lembreteLeituraService.ligado
+                      ? Icons.notifications_active_rounded
+                      : Icons.notifications_none_rounded,
+                  color: lembreteLeituraService.ligado
+                      ? const Color(0xFF7C4DFF)
+                      : null,
+                ),
+                tooltip: 'Lembrete de leitura',
+                onPressed: () => _abrirConfiguracoesLembrete(context),
+              );
+            },
+          ),
           ListenableBuilder(
             listenable: themeService,
             builder: (context, _) {

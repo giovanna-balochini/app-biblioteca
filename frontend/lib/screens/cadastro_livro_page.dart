@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:frontend/services/auth_service.dart';
 import 'package:frontend/services/google_books_service.dart';
 import 'package:frontend/widgets/estrelas_avaliacao.dart';
 import 'package:frontend/utils/formatters.dart';
@@ -285,6 +286,11 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
       imagemParaSalvar = _capaUrl;
     }
 
+    final avaliacaoParaEnviar = _avaliacao;
+    final dataParaEnviar = _lido && _dataConclusao != null
+        ? formatarDataISO(_dataConclusao)
+        : null;
+
     final livro = {
       'titulo': _tituloController.text.trim(),
       'autor': _autorController.text.trim(),
@@ -293,24 +299,37 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
       'descricao': _descricaoController.text.trim(),
       'imagem': imagemParaSalvar,
       'lido': _lido,
-      'avaliacao': _avaliacao,
-      'dataConclusao': _lido && _dataConclusao != null ? formatarDataISO(_dataConclusao) : null,
     };
 
     try {
-      final response = await http.post(
-        Uri.parse('http://10.0.2.2:8080/livros'),
-        headers: {'Content-Type': 'application/json; charset=utf-8'},
-        body: jsonEncode(livro),
-      );
+      final response = await AuthService.post('/livros', livro);
 
       if (!mounted) return;
-      setState(() => _salvando = false);
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
+        dynamic livroCriado;
+        try {
+          livroCriado = jsonDecode(utf8.decode(response.bodyBytes));
+        } catch (_) {
+          livroCriado = null;
+        }
+
+        final livroId = livroCriado is Map<String, dynamic> ? livroCriado['id'] : null;
+        if (livroId != null && (avaliacaoParaEnviar != null || dataParaEnviar != null)) {
+          try {
+            await AuthService.post('/livros/$livroId/avaliacoes', {
+              'nota': avaliacaoParaEnviar ?? 5,
+              'comentario': null,
+              'dataConclusao': dataParaEnviar,
+            });
+          } catch (_) {}
+        }
+
+        setState(() => _salvando = false);
         mostrarSnackbarSucesso(context, 'Livro cadastrado com sucesso!');
         Navigator.pop(context, true);
       } else {
+        setState(() => _salvando = false);
         final mensagem = _mensagemErro(
           response,
           'Nao foi possivel salvar o livro.',

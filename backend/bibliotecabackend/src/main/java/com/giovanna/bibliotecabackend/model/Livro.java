@@ -1,5 +1,6 @@
 package com.giovanna.bibliotecabackend.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.Data;
 
@@ -20,7 +21,9 @@ public class Livro {
     private String descricao;
     private String imagem;
     private boolean lido;
-    private Integer avaliacao; // 1 a 5 estrelas
-    private String dataConclusao; // Formato ISO: yyyy-MM-dd (ex: 2026-08-11)
-    
+
+    @JsonIgnore
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "usuario_id")
+    private Usuario dono;
 }

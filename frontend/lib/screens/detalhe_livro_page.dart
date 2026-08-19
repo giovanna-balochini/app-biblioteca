@@ -5,11 +5,13 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:frontend/services/auth_service.dart';
 import 'package:frontend/services/google_books_service.dart';
 import 'package:frontend/widgets/estrelas_avaliacao.dart';
 import 'package:frontend/widgets/info_tile.dart';
 import 'package:frontend/utils/formatters.dart';
 import 'package:frontend/utils/snackbars.dart';
+import 'package:frontend/screens/perfil_usuario_page.dart';
 
 class DetalheLivroPage extends StatefulWidget {
   final Map<String, dynamic> livro;
@@ -37,6 +39,11 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
   String? _capaUrlLocal;
   String? _tipoCapa;
   final ImagePicker _imagePicker = ImagePicker();
+
+  double? _mediaAvaliacoes;
+  int _totalAvaliacoes = 0;
+  List<Map<String, dynamic>> _listaAvaliacoes = [];
+  bool _carregandoAvaliacoes = false;
 
   bool _capaFoiAlterada() {
     final original = widget.livro['imagem']?.toString();
@@ -142,6 +149,289 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
     } catch (_) {}
 
     return fallback;
+  }
+
+  Future<void> _carregarAvaliacoesComunidade() async {
+    if (!mounted) return;
+    setState(() => _carregandoAvaliacoes = true);
+    try {
+      final response = await AuthService.get('/livros/${widget.livro['id']}/avaliacoes');
+      if (response.statusCode == 200) {
+        dynamic body;
+        try {
+          body = jsonDecode(utf8.decode(response.bodyBytes));
+        } catch (e) {}
+        if (body is Map<String, dynamic>) {
+          final media = body['media'];
+          final total = body['total'];
+          final lista = body['avaliacoes'];
+          if (!mounted) return;
+          setState(() {
+            if (media is num) _mediaAvaliacoes = media.toDouble();
+            if (total is int) _totalAvaliacoes = total;
+            if (lista is List) {
+              _listaAvaliacoes = List<Map<String, dynamic>>.from(
+                lista.whereType<Map<String, dynamic>>(),
+              );
+            }
+            _carregandoAvaliacoes = false;
+          });
+        } else {
+          if (mounted) setState(() => _carregandoAvaliacoes = false);
+        }
+      } else {
+        if (mounted) setState(() => _carregandoAvaliacoes = false);
+      }
+    } catch (_) {
+      if (mounted) setState(() => _carregandoAvaliacoes = false);
+    }
+  }
+
+  Future<void> _abrirPerfilAutor(Map<String, dynamic> av) async {
+    final usuarioId = av['usuarioId'];
+    if (usuarioId == null) return;
+    final id = usuarioId is int ? usuarioId : int.tryParse(usuarioId.toString());
+    if (id == null) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PerfilUsuarioPage(
+          usuarioId: id,
+          apelido: av['usuarioNome']?.toString(),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _abrirMinhaAvaliacao() async {
+    final minhaAvaliacao = _listaAvaliacoes.firstWhere(
+      (a) => a['usuarioId'] == AuthService.usuarioId,
+      orElse: () => <String, dynamic>{},
+    );
+
+    int notaSelecionada =
+        minhaAvaliacao['nota'] is int ? minhaAvaliacao['nota'] as int : (_avaliacao ?? 0);
+    DateTime? dataSelecionada = parseDataISO(minhaAvaliacao['dataConclusao']?.toString()) ?? _dataConclusao;
+    TextEditingController comentarioController =
+        TextEditingController(text: minhaAvaliacao['comentario']?.toString() ?? '');
+    bool salvandoAvaliacao = false;
+
+    final resultado = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctxBottom) {
+        return StatefulBuilder(
+          builder: (ctx, setBottomState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(ctxBottom).viewInsets.bottom + 16,
+                left: 12,
+                right: 12,
+              ),
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Theme.of(ctxBottom).scaffoldBackgroundColor,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF7C4DFF).withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            alignment: Alignment.center,
+                            child: const Icon(Icons.rate_review_rounded, color: Color(0xFF7C4DFF), size: 22),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Minha avaliação',
+                              style: Theme.of(ctxBottom).textTheme.titleLarge?.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close_rounded),
+                            onPressed: salvandoAvaliacao ? null : () => Navigator.of(ctxBottom).pop(false),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8F5FF),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Text(
+                                  'Nota',
+                                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                                ),
+                                const Spacer(),
+                                EstrelasAvaliacao(
+                                  avaliacao: notaSelecionada == 0 ? null : notaSelecionada,
+                                  tamanho: 28,
+                                  clicavel: true,
+                                  aoClicar: (v) => setBottomState(
+                                      () => notaSelecionada = v == 0 ? 0 : v),
+                                ),
+                              ],
+                            ),
+                            if (notaSelecionada > 0) ...[
+                              const SizedBox(height: 10),
+                              Padding(
+                                padding: const EdgeInsets.only(left: 2),
+                                child: Text(
+                                  notaSelecionada == 1
+                                      ? '1 estrela. Não gostei muito. 😕'
+                                      : notaSelecionada == 2
+                                          ? '2 estrelas. Deixa a desejar. 🫤'
+                                          : notaSelecionada == 3
+                                              ? '3 estrelas. Leitura mediana. 🙂'
+                                              : notaSelecionada == 4
+                                                  ? '4 estrelas! Muito bom! 🥰'
+                                                  : '5 estrelas! Livro incrível! 😍',
+                                  style: const TextStyle(color: Color(0xFF6B6B80), fontSize: 13),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      TextField(
+                        controller: comentarioController,
+                        minLines: 3,
+                        maxLines: 6,
+                        maxLength: 500,
+                        decoration: InputDecoration(
+                          labelText: 'Comentário (opcional)',
+                          hintText: 'O que você achou deste livro?',
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                          prefixIcon: const Icon(Icons.comment_outlined),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextFormField(
+                        readOnly: true,
+                        controller: TextEditingController(
+                          text: dataSelecionada != null ? formatarData(dataSelecionada) : '',
+                        ),
+                        onTap: () async {
+                          final hoje = DateTime.now();
+                          final data = await showDatePicker(
+                            context: ctxBottom,
+                            initialDate: dataSelecionada ?? hoje,
+                            firstDate: DateTime(1900),
+                            lastDate: hoje,
+                            locale: const Locale('pt', 'BR'),
+                            confirmText: 'Confirmar',
+                            cancelText: 'Cancelar',
+                            helpText: 'Data de conclusão',
+                          );
+                          if (data != null) {
+                            setBottomState(() => dataSelecionada = data);
+                          }
+                        },
+                        decoration: InputDecoration(
+                          labelText: 'Data de conclusão (opcional)',
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                          prefixIcon: const Icon(Icons.calendar_today_rounded, color: Color(0xFF7C4DFF)),
+                          suffixIcon: dataSelecionada != null
+                              ? IconButton(
+                                  icon: const Icon(Icons.close, color: Color(0xFF7C4DFF)),
+                                  onPressed: () => setBottomState(() => dataSelecionada = null),
+                                )
+                              : null,
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 54,
+                        child: ElevatedButton(
+                          onPressed: salvandoAvaliacao
+                              ? null
+                              : () async {
+                                  if (notaSelecionada == 0) {
+                                    mostrarSnackbarAviso(ctxBottom, 'Selecione uma nota de 1 a 5.');
+                                    return;
+                                  }
+                                  setBottomState(() => salvandoAvaliacao = true);
+                                  try {
+                                    final response = await AuthService.post(
+                                      '/livros/${widget.livro['id']}/avaliacoes',
+                                      {
+                                        'nota': notaSelecionada,
+                                        'comentario': comentarioController.text.trim().isEmpty
+                                            ? null
+                                            : comentarioController.text.trim(),
+                                        'dataConclusao': dataSelecionada != null
+                                            ? formatarDataISO(dataSelecionada)
+                                            : null,
+                                      },
+                                    );
+                                    if (!ctxBottom.mounted) return;
+                                    setBottomState(() => salvandoAvaliacao = false);
+                                    if (response.statusCode >= 200 && response.statusCode < 300) {
+                                      mostrarSnackbarSucesso(ctxBottom, 'Avaliação publicada!');
+                                      Navigator.of(ctxBottom).pop(true);
+                                    } else {
+                                      mostrarSnackbarErro(ctxBottom, 'Não foi possível publicar. Tente novamente.');
+                                    }
+                                  } catch (_) {
+                                    if (!ctxBottom.mounted) return;
+                                    setBottomState(() => salvandoAvaliacao = false);
+                                    mostrarSnackbarErro(ctxBottom, 'Falha na conexão.');
+                                  }
+                                },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF7C4DFF),
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          ),
+                          child: salvandoAvaliacao
+                              ? const SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                                )
+                              : const Text('Publicar avaliação',
+                                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (resultado == true) {
+      _avaliacao = notaSelecionada == 0 ? null : notaSelecionada;
+      _dataConclusao = dataSelecionada;
+      _carregarAvaliacoesComunidade();
+    }
   }
 
   Future<void> _selecionarDaGaleria() async {
@@ -335,6 +625,7 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
         _capaUrlLocal = imgOriginal;
       }
     }
+    _carregarAvaliacoesComunidade();
   }
 
   void _cancelarEdicao() {
@@ -386,6 +677,11 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
       imagemParaSalvar = widget.livro['imagem']?.toString();
     }
 
+    final avaliacaoParaEnviar = _avaliacao;
+    final dataParaEnviar = _lido && _dataConclusao != null
+        ? formatarDataISO(_dataConclusao)
+        : null;
+
     final livroAtualizado = {
       'titulo': _tituloController.text.trim(),
       'autor': _autorController.text.trim(),
@@ -394,25 +690,33 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
       'descricao': _descricaoController.text.trim(),
       'imagem': imagemParaSalvar,
       'lido': _lido,
-      'avaliacao': _avaliacao,
-      'dataConclusao': _lido && _dataConclusao != null ? formatarDataISO(_dataConclusao) : null,
     };
 
     try {
-      final response = await http.put(
-        Uri.parse('http://10.0.2.2:8080/livros/${widget.livro['id']}'),
-        headers: {'Content-Type': 'application/json; charset=utf-8'},
-        body: json.encode(livroAtualizado),
+      final response = await AuthService.put(
+        '/livros/${widget.livro['id']}',
+        livroAtualizado,
       );
 
       if (!mounted) return;
-      setState(() => _salvando = false);
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
+        if (avaliacaoParaEnviar != null || dataParaEnviar != null) {
+          try {
+            await AuthService.post('/livros/${widget.livro['id']}/avaliacoes', {
+              'nota': avaliacaoParaEnviar ?? 5,
+              'comentario': null,
+              'dataConclusao': dataParaEnviar,
+            });
+          } catch (_) {}
+        }
+        setState(() => _salvando = false);
         setState(() => _editando = false);
+        _carregarAvaliacoesComunidade();
         mostrarSnackbarSucesso(context, 'Livro atualizado com sucesso.');
         Navigator.pop(context, true);
       } else {
+        setState(() => _salvando = false);
         final mensagem = _mensagemErro(
           response,
           'Nao foi possivel atualizar o livro.',
@@ -458,9 +762,7 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
       if (deletouNoBackend || desfez) return;
       deletouNoBackend = true;
       try {
-        await http.delete(
-          Uri.parse('http://10.0.2.2:8080/livros/$livroId'),
-        );
+        await AuthService.delete('/livros/$livroId');
       } catch (_) {}
     }
 
@@ -1049,6 +1351,227 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
                           ),
                         ),
                       ],
+                      const SizedBox(height: 18),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8F5FF),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: const Color(0xFFE0D7FF), width: 1),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF7C4DFF).withValues(alpha: 0.14),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: const Icon(Icons.people_alt_rounded, color: Color(0xFF7C4DFF), size: 20),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Avaliações da comunidade',
+                                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                              fontWeight: FontWeight.w800,
+                                              color: const Color(0xFF2A2A38),
+                                            ),
+                                      ),
+                                      const SizedBox(height: 1),
+                                      _carregandoAvaliacoes
+                                          ? const Text('Carregando...',
+                                              style: TextStyle(color: Color(0xFF8A8A9D), fontSize: 13))
+                                          : Text(
+                                              '$_totalAvaliacoes avaliaç${_totalAvaliacoes == 1 ? 'ão' : 'ões'}${_mediaAvaliacoes != null ? ' · média ⭐${_mediaAvaliacoes!.toStringAsFixed(1)}' : ''}',
+                                              style: const TextStyle(color: Color(0xFF6B6B80), fontSize: 13),
+                                            ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                SizedBox(
+                                  height: 42,
+                                  child: OutlinedButton.icon(
+                                    onPressed: _carregandoAvaliacoes ? null : _abrirMinhaAvaliacao,
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: const Color(0xFF7C4DFF),
+                                      side: const BorderSide(color: Color(0xFF7C4DFF), width: 1.2),
+                                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    ),
+                                    icon: const Icon(Icons.rate_review_outlined, size: 16),
+                                    label: const Text(
+                                      'Minha',
+                                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 14),
+                            if (_carregandoAvaliacoes)
+                              const Center(
+                                child: Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 10),
+                                  child: SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF7C4DFF)),
+                                  ),
+                                ),
+                              )
+                            else if (_listaAvaliacoes.isEmpty)
+                              Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.chat_bubble_outline_rounded,
+                                        size: 18, color: const Color(0xFF7C4DFF).withValues(alpha: 0.6)),
+                                    const SizedBox(width: 8),
+                                    const Expanded(
+                                      child: Text(
+                                        'Ainda ninguém avaliou esse livro publicamente. Seja o primeiro!',
+                                        style: TextStyle(color: Color(0xFF6B6B80), fontSize: 13),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            else
+                              ..._listaAvaliacoes.map((av) {
+                                final nome = av['usuarioNome']?.toString() ?? 'Usuário anônimo';
+                                final foto = av['usuarioFotoPerfil']?.toString();
+                                final nota = av['nota'] is int ? av['nota'] as int : 0;
+                                final comentario = av['comentario']?.toString();
+                                final dataCriacao = av['dataCriacao']?.toString();
+                                final dataFormatada = dataCriacao != null && dataCriacao.length >= 10
+                                    ? formatarData(parseDataISO(dataCriacao.substring(0, 10)))
+                                    : null;
+                                final isMinha = av['usuarioId'] != null && av['usuarioId'] == AuthService.usuarioId;
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 10),
+                                  child: Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context).cardColor,
+                                      borderRadius: BorderRadius.circular(14),
+                                      border: Border.all(
+                                        color: isMinha
+                                            ? const Color(0xFF7C4DFF).withValues(alpha: 0.4)
+                                            : const Color(0xFFE9E6F2),
+                                        width: isMinha ? 1.2 : 0.6,
+                                      ),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Material(
+                                              color: Colors.transparent,
+                                              child: InkWell(
+                                                onTap: () => _abrirPerfilAutor(av),
+                                                borderRadius: BorderRadius.circular(24),
+                                                child: CircleAvatar(
+                                                  radius: 16,
+                                                  backgroundColor: const Color(0xFF7C4DFF).withValues(alpha: 0.12),
+                                                  backgroundImage: (foto != null && foto.isNotEmpty && foto.startsWith('http'))
+                                                      ? NetworkImage(foto)
+                                                      : null,
+                                                  child: (foto == null || foto.isEmpty || !foto.startsWith('http'))
+                                                      ? Text(
+                                                          nome.isNotEmpty ? nome[0].toUpperCase() : '?',
+                                                          style: const TextStyle(
+                                                            color: Color(0xFF7C4DFF),
+                                                            fontWeight: FontWeight.w800,
+                                                            fontSize: 14,
+                                                          ),
+                                                        )
+                                                      : null,
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 10),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Row(
+                                                    children: [
+                                                      Expanded(
+                                                        child: Material(
+                                                          color: Colors.transparent,
+                                                          child: InkWell(
+                                                            onTap: () => _abrirPerfilAutor(av),
+                                                            borderRadius: BorderRadius.circular(6),
+                                                            child: Text(
+                                                              isMinha ? '$nome (você)' : nome,
+                                                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                                                    fontWeight: FontWeight.w700,
+                                                                    color: const Color(0xFF7C4DFF),
+                                                                    decoration: TextDecoration.underline,
+                                                                    decorationColor: const Color(0xFF7C4DFF).withValues(alpha: 0.4),
+                                                                  ),
+                                                              maxLines: 1,
+                                                              overflow: TextOverflow.ellipsis,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                      const SizedBox(width: 8),
+                                                      EstrelasAvaliacao(
+                                                        avaliacao: nota == 0 ? null : nota,
+                                                        tamanho: 14,
+                                                      ),
+                                                    ],
+                                                  ),
+                                                  if (dataFormatada != null) ...[
+                                                    const SizedBox(height: 1),
+                                                    Text(
+                                                      dataFormatada,
+                                                      style: const TextStyle(
+                                                        color: Color(0xFF8A8A9D),
+                                                        fontSize: 11.5,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        if (comentario != null && comentario.trim().isNotEmpty) ...[
+                                          const SizedBox(height: 8),
+                                          Padding(
+                                            padding: const EdgeInsets.only(left: 42),
+                                            child: Text(
+                                              comentario,
+                                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                                    color: const Color(0xFF3B3B4B),
+                                                    height: 1.35,
+                                                  ),
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              }),
+                          ],
+                        ),
+                      ),
                       const SizedBox(height: 20),
                       SizedBox(
                         width: double.infinity,

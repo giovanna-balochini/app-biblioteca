@@ -35,8 +35,9 @@ public class LivroController {
     @PutMapping("/{id}")
     public ResponseEntity<Livro> atualizar(@PathVariable Long id, @RequestBody Livro livro) {
         return livroService.buscarPorId(id)
-                .map(livroExistente-> {
+                .map(livroExistente -> {
                     livro.setId(id);
+                    livro.setDono(livroExistente.getDono());
                     return ResponseEntity.ok(livroService.salvar(livro));
                 })
                 .orElse(ResponseEntity.notFound().build());
@@ -51,5 +52,4 @@ public class LivroController {
                })
                .orElse(ResponseEntity.notFound().build());
     }
-    
 }
