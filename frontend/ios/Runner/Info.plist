@@ -70,5 +70,7 @@
 		<true/>
 		<key>UIViewControllerBasedStatusBarAppearance</key>
 		<false/>
+		<key>NSUserNotificationUsageDescription</key>
+		<string>Lembretes diários para incentivar você a ler mais!</string>
 	</dict>
 </plist>
