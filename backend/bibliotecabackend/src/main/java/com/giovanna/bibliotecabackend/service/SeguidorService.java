@@ -25,6 +25,7 @@ public class SeguidorService {
 
     private final SeguidorRepository seguidorRepository;
     private final UsuarioRepository usuarioRepository;
+    private final NotificacaoService notificacaoService;
 
     private Optional<Usuario> obterUsuarioLogadoSeAutenticado() {
         try {
@@ -115,7 +116,9 @@ public class SeguidorService {
         Seguidor s = new Seguidor();
         s.setSeguidor(eu);
         s.setSeguido(alvo);
-        return seguidorRepository.save(s);
+        Seguidor salvo = seguidorRepository.save(s);
+        notificacaoService.criarNotificacaoSeguir(eu, alvo);
+        return salvo;
     }
 
     @Transactional

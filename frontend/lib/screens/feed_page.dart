@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'dart:convert';
+import 'dart:async';
 import 'package:frontend/services/auth_service.dart';
 import 'package:frontend/screens/detalhe_livro_page.dart';
 import 'package:frontend/screens/perfil_usuario_page.dart';
+import 'package:frontend/screens/notificacoes_page.dart';
 import 'package:frontend/widgets/estrelas_avaliacao.dart';
 import 'package:frontend/utils/formatters.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -25,6 +27,8 @@ class _FeedPageState extends State<FeedPage> with AutomaticKeepAliveClientMixin 
   bool _erro = false;
   String _filtro = 'todos'; // 'todos' ou 'seguindo'
   static const int _tamPagina = 20;
+  int _qtdeNotificacoesNaoLidas = 0;
+  Timer? _timerAtualizaNotificacoes;
 
   @override
   bool get wantKeepAlive => true;
@@ -40,12 +44,30 @@ class _FeedPageState extends State<FeedPage> with AutomaticKeepAliveClientMixin 
       }
     });
     _carregarTudo();
+    _carregarContagemNotificacoes();
+    _timerAtualizaNotificacoes = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) _carregarContagemNotificacoes();
+    });
   }
 
   @override
   void dispose() {
+    _timerAtualizaNotificacoes?.cancel();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  Future<void> _carregarContagemNotificacoes() async {
+    try {
+      final r = await AuthService.get('/notificacoes/contagem-nao-lidas');
+      if (r.statusCode == 200) {
+        final body = jsonDecode(utf8.decode(r.bodyBytes));
+        final qtde = body is Map && body['naoLidas'] is int ? body['naoLidas'] as int : 0;
+        if (mounted && qtde != _qtdeNotificacoesNaoLidas) {
+          setState(() => _qtdeNotificacoesNaoLidas = qtde);
+        }
+      }
+    } catch (e, s) { /* ignora */ }
   }
 
   Future<void> _carregarTudo() async {
@@ -333,9 +355,38 @@ class _FeedPageState extends State<FeedPage> with AutomaticKeepAliveClientMixin 
                           ),
                         ),
                         Text(
-                          'Avaliações recentes da comunidade',
+                          'Avaliações recentes da comunidade de leitores',
                           style: tema.textTheme.bodySmall?.copyWith(color: Colors.white70),
                         ),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    child: Stack(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.notifications_on_outlined, color: Colors.white),
+                          tooltip: 'Notificações',
+                          onPressed: () async {
+                            await Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificacoesPage()));
+                            if (mounted) _carregarContagemNotificacoes();
+                          },
+                        ),
+                        if (_qtdeNotificacoesNaoLidas > 0)
+                          Positioned(
+                            right: 6, top: 6,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 4.5, vertical: 1.5),
+                              constraints: const BoxConstraints(minWidth: 17, minHeight: 17),
+                              decoration: const BoxDecoration(color: Color(0xFFFF3B7A), shape: BoxShape.circle),
+                              alignment: Alignment.center,
+                              child: Text(
+                                _qtdeNotificacoesNaoLidas > 99 ? '99+' : '$_qtdeNotificacoesNaoLidas',
+                                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 0.2),
+                              ),
+                            ),
+                          ),
                       ],
                     ),
                   ),

@@ -123,15 +123,6 @@ class _LoginPageState extends State<LoginPage> {
                         return null;
                       },
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Sugestão (WiFi atual detectada): http://192.168.15.124:8080',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: corPrimaria,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
                     const SizedBox(height: 16),
                     Row(
                       children: [
@@ -192,6 +183,72 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+  Future<void> _abrirMenuDevOculto() async {
+    final corPrimaria = const Color(0xFF7C4DFF);
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: const Text('Configurações de desenvolvedor'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.wifi_find_rounded, size: 14, color: corPrimaria),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Backend (${AuthService.tipoUrlAtual})',
+                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF5A3EE8)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                AuthService.baseUrlAtual,
+                style: const TextStyle(fontSize: 13, fontFamily: 'monospace', color: Color(0xFF2A2A38)),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          OutlinedButton.icon(
+            onPressed: () async {
+              await AuthService.resetarBaseUrl();
+              await AuthService.setBaseUrlManual(null);
+              if (!ctx.mounted) return;
+              Navigator.of(ctx).pop();
+              if (mounted) {
+                setState(() {});
+                mostrarSnackbarSucesso(context, 'URL resetada. Modo automático.');
+              }
+            },
+            style: OutlinedButton.styleFrom(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              foregroundColor: const Color(0xFF6B6B80),
+            ),
+            icon: const Icon(Icons.restart_alt_rounded, size: 16),
+            label: const Text('Reset'),
+          ),
+          FilledButton.icon(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              _abrirConfigUrl();
+            },
+            style: FilledButton.styleFrom(
+              backgroundColor: corPrimaria,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            icon: const Icon(Icons.tune_rounded, size: 16),
+            label: const Text('Alterar URL'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final tema = Theme.of(context);
@@ -208,15 +265,18 @@ class _LoginPageState extends State<LoginPage> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Container(
-                    width: 84,
-                    height: 84,
-                    decoration: BoxDecoration(
-                      color: corPrimaria.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(24),
+                  GestureDetector(
+                    onLongPress: _abrirMenuDevOculto,
+                    child: Container(
+                      width: 84,
+                      height: 84,
+                      decoration: BoxDecoration(
+                        color: corPrimaria.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      alignment: Alignment.center,
+                      child: Icon(Icons.menu_book_rounded, size: 44, color: corPrimaria),
                     ),
-                    alignment: Alignment.center,
-                    child: Icon(Icons.menu_book_rounded, size: 44, color: corPrimaria),
                   ),
                   const SizedBox(height: 20),
                   Text(
@@ -314,97 +374,6 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 16),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF0EDFF),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFDDD6FF)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(Icons.wifi_find_rounded,
-                                size: 14, color: const Color(0xFF5A3EE8)),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                'Backend (${AuthService.tipoUrlAtual}): ${AuthService.baseUrlAtual}',
-                                style: const TextStyle(
-                                    fontSize: 11,
-                                    color: Color(0xFF5A3EE8),
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: 0.1),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        SizedBox(
-                          height: 34,
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: OutlinedButton.icon(
-                                  onPressed: _carregando ? null : _abrirConfigUrl,
-                                  style: OutlinedButton.styleFrom(
-                                    side: BorderSide(
-                                        color: const Color(0xFF5A3EE8)
-                                            .withValues(alpha: 0.5),
-                                        width: 1),
-                                    foregroundColor: const Color(0xFF5A3EE8),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                  ),
-                                  icon: const Icon(Icons.tune_rounded, size: 15),
-                                  label: const Text(
-                                    'Alterar URL',
-                                    style: TextStyle(
-                                        fontSize: 12, fontWeight: FontWeight.w800),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: OutlinedButton.icon(
-                                  onPressed: _carregando
-                                      ? null
-                                      : () async {
-                                          await AuthService.resetarBaseUrl();
-                                          if (mounted) setState(() {});
-                                          mostrarSnackbarSucesso(context,
-                                              'URL resetada. Tente entrar novamente.');
-                                        },
-                                  style: OutlinedButton.styleFrom(
-                                    side: BorderSide(
-                                        color: const Color(0xFF8A8A9D)
-                                            .withValues(alpha: 0.45),
-                                        width: 1),
-                                    foregroundColor: const Color(0xFF6B6B80),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                  ),
-                                  icon:
-                                      const Icon(Icons.restart_alt_rounded, size: 15),
-                                  label: const Text(
-                                    'Reset',
-                                    style: TextStyle(
-                                        fontSize: 12, fontWeight: FontWeight.w800),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
                   ),
                 ],
               ),

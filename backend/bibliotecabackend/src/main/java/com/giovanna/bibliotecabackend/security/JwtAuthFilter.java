@@ -2,7 +2,6 @@ package com.giovanna.bibliotecabackend.security;
 
 import com.giovanna.bibliotecabackend.model.Usuario;
 import com.giovanna.bibliotecabackend.repository.UsuarioRepository;
-import com.giovanna.bibliotecabackend.service.JwtService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;

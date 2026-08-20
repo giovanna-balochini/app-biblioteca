@@ -355,6 +355,34 @@ class AuthService {
     });
   }
 
+  static Future<http.Response> patch(String path, Object? body) async {
+    return _tratarResposta(() async {
+      final urls = <String>{};
+      if (_baseUrlResolvida != null) urls.add(_baseUrlResolvida!);
+      urls.addAll(_baseUrls);
+      Object? ultimoErro;
+      for (final url in urls) {
+        try {
+          final res = await http
+              .patch(
+                Uri.parse('$url$path'),
+                headers: _headers,
+                body: body == null ? null : jsonEncode(body),
+              )
+              .timeout(const Duration(seconds: 7));
+          if (res.statusCode >= 200 && res.statusCode < 599) {
+            await _persistirBaseUrl(url);
+            return res;
+          }
+        } catch (e) {
+          ultimoErro = e;
+        }
+      }
+      return http.Response(
+          '{"erro":"Backend inacessível em: ${urls.join(", ")}. $ultimoErro"}', 500);
+    });
+  }
+
   static Future<http.Response> _tratarResposta(Future<http.Response> Function() chamada) async {
     if (!_inicializado) await inicializar();
     try {

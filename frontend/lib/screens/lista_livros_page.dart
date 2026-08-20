@@ -7,6 +7,7 @@ import 'package:frontend/services/lembrete_leitura_service.dart' show lembreteLe
 import 'package:frontend/screens/cadastro_livro_page.dart';
 import 'package:frontend/screens/detalhe_livro_page.dart';
 import 'package:frontend/screens/login_page.dart';
+import 'package:frontend/screens/notificacoes_page.dart';
 import 'package:frontend/widgets/estrelas_avaliacao.dart';
 import 'package:frontend/widgets/capa_livro.dart';
 import 'package:frontend/utils/formatters.dart';
@@ -67,20 +68,42 @@ class _ListaLivrosPageState extends State<ListaLivrosPage> {
   bool _carregandoMais = false;
   bool _temMaisParaCarregar = false;
   static const int _tamanhoPagina = 10;
+  int _qtdeNotificacoesNaoLidas = 0;
+  Timer? _timerAtualizaNotificacoes;
 
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_aoRolarAteOFinal);
     buscarLivros();
+    _carregarContagemNotificacoes();
+    _timerAtualizaNotificacoes = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) _carregarContagemNotificacoes();
+    });
   }
 
   @override
   void dispose() {
     _buscaController.dispose();
     _debounceBusca?.cancel();
+    _timerAtualizaNotificacoes?.cancel();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  Future<void> _carregarContagemNotificacoes() async {
+    try {
+      final r = await AuthService.get('/notificacoes/contagem-nao-lidas');
+      if (r.statusCode == 200) {
+        final body = jsonDecode(utf8.decode(r.bodyBytes));
+        final qtde = body is Map && body['naoLidas'] is int ? body['naoLidas'] as int : 0;
+        if (mounted && qtde != _qtdeNotificacoesNaoLidas) {
+          setState(() => _qtdeNotificacoesNaoLidas = qtde);
+        } else if (mounted && _qtdeNotificacoesNaoLidas == 0 && qtde != 0) {
+          setState(() => _qtdeNotificacoesNaoLidas = qtde);
+        }
+      }
+    } catch (e, s) { /* ignora silenciosamente */ }
   }
 
   Future<void> buscarLivros() async {
@@ -970,19 +993,24 @@ class _ListaLivrosPageState extends State<ListaLivrosPage> {
                   ),
                 ),
                 const SizedBox(width: 10),
-                ShaderMask(
-                  shaderCallback: (bounds) => const LinearGradient(
-                    colors: [Color(0xFF7C4DFF), Color(0xFFB28CFF)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ).createShader(bounds),
-                  blendMode: BlendMode.srcIn,
-                  child: const Text(
-                    'Minha Biblioteca',
-                    style: TextStyle(
-                      fontFamily: 'Diphylleia',
-                      fontSize: 27,
-                      letterSpacing: 0.2,
+                Expanded(
+                  child: ShaderMask(
+                    shaderCallback: (bounds) => const LinearGradient(
+                      colors: [Color(0xFF7C4DFF), Color(0xFFB28CFF)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ).createShader(bounds),
+                    blendMode: BlendMode.srcIn,
+                    child: const Text(
+                      'Minha Biblioteca',
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                      softWrap: false,
+                      style: TextStyle(
+                        fontFamily: 'Diphylleia',
+                        fontSize: 27,
+                        letterSpacing: 0.2,
+                      ),
                     ),
                   ),
                 ),
@@ -1000,22 +1028,46 @@ class _ListaLivrosPageState extends State<ListaLivrosPage> {
         ),
         toolbarHeight: 92,
         actions: [
-          ListenableBuilder(
-            listenable: lembreteLeituraService,
-            builder: (context, _) {
-              return IconButton(
-                icon: Icon(
-                  lembreteLeituraService.ligado
-                      ? Icons.notifications_active_rounded
-                      : Icons.notifications_none_rounded,
-                  color: lembreteLeituraService.ligado
-                      ? const Color(0xFF7C4DFF)
-                      : null,
+          SizedBox(
+            height: 48,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                IconButton(
+                  icon: ListenableBuilder(
+                    listenable: lembreteLeituraService,
+                    builder: (ctx, _) => Icon(
+                      lembreteLeituraService.ligado
+                          ? Icons.notifications_active_rounded
+                          : Icons.notifications_none_rounded,
+                      color: lembreteLeituraService.ligado
+                          ? const Color(0xFF7C4DFF)
+                          : (_qtdeNotificacoesNaoLidas > 0 ? null : null),
+                    ),
+                  ),
+                  tooltip: 'Notificações (toque) · Lembrete (segure)',
+                  onPressed: () async {
+                    await Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificacoesPage()));
+                    if (mounted) _carregarContagemNotificacoes();
+                  },
+                  onLongPress: () => _abrirConfiguracoesLembrete(context),
                 ),
-                tooltip: 'Lembrete de leitura',
-                onPressed: () => _abrirConfiguracoesLembrete(context),
-              );
-            },
+                if (_qtdeNotificacoesNaoLidas > 0)
+                  Positioned(
+                    right: 4, top: 4,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 4.5, vertical: 1.5),
+                      constraints: const BoxConstraints(minWidth: 17, minHeight: 17),
+                      decoration: const BoxDecoration(color: Color(0xFFFF3B7A), shape: BoxShape.circle),
+                      alignment: Alignment.center,
+                      child: Text(
+                        _qtdeNotificacoesNaoLidas > 99 ? '99+' : '$_qtdeNotificacoesNaoLidas',
+                        style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 0.2),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
           ListenableBuilder(
             listenable: themeService,

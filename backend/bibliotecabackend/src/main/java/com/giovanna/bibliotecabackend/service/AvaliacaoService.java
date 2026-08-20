@@ -24,6 +24,7 @@ public class AvaliacaoService {
     private final LivroRepository livroRepository;
     private final UsuarioService usuarioService;
     private final SeguidorService seguidorService;
+    private final NotificacaoService notificacaoService;
 
     public List<Avaliacao> listarPorLivro(Long livroId) {
         Livro livro = livroRepository.findById(livroId)
@@ -41,12 +42,15 @@ public class AvaliacaoService {
 
         Optional<Avaliacao> existente = avaliacaoRepository.findByAutorAndLivro(autor, livro);
         Avaliacao avaliacao = existente.orElseGet(Avaliacao::new);
+        boolean nova = existente.isEmpty();
         avaliacao.setAutor(autor);
         avaliacao.setLivro(livro);
         avaliacao.setNota(nota);
         avaliacao.setComentario(comentario);
         avaliacao.setDataConclusao(dataConclusao);
-        return avaliacaoRepository.save(avaliacao);
+        Avaliacao salvo = avaliacaoRepository.save(avaliacao);
+        if (nova) notificacaoService.criarNotificacaoAvaliacao(salvo);
+        return salvo;
     }
 
     public Double mediaPorLivro(Long livroId) {
