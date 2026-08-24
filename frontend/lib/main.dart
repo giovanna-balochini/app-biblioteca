@@ -19,6 +19,9 @@ Future<void> main() async {
   await AuthService.inicializar();
   await _themeService.carregarPreferencia();
   await lembreteLeituraService.carregarPreferencias();
+  if (AuthService.estaLogado) {
+    try { await lembreteLeituraService.sincronizarDoServidor(); } catch (_) {}
+  }
   runApp(const MyApp());
 }
 

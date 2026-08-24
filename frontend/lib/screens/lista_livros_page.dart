@@ -10,6 +10,7 @@ import 'package:frontend/screens/login_page.dart';
 import 'package:frontend/screens/notificacoes_page.dart';
 import 'package:frontend/widgets/estrelas_avaliacao.dart';
 import 'package:frontend/widgets/capa_livro.dart';
+import 'package:frontend/widgets/menu_configuracoes_bottomsheet.dart';
 import 'package:frontend/utils/formatters.dart';
 import 'package:frontend/utils/snackbars.dart';
 
@@ -1042,15 +1043,14 @@ class _ListaLivrosPageState extends State<ListaLivrosPage> {
                           : Icons.notifications_none_rounded,
                       color: lembreteLeituraService.ligado
                           ? const Color(0xFF7C4DFF)
-                          : (_qtdeNotificacoesNaoLidas > 0 ? null : null),
+                          : null,
                     ),
                   ),
-                  tooltip: 'Notificações (toque) · Lembrete (segure)',
+                  tooltip: 'Notificações',
                   onPressed: () async {
                     await Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificacoesPage()));
                     if (mounted) _carregarContagemNotificacoes();
                   },
-                  onLongPress: () => _abrirConfiguracoesLembrete(context),
                 ),
                 if (_qtdeNotificacoesNaoLidas > 0)
                   Positioned(
@@ -1069,27 +1069,15 @@ class _ListaLivrosPageState extends State<ListaLivrosPage> {
               ],
             ),
           ),
-          ListenableBuilder(
-            listenable: themeService,
-            builder: (context, _) {
-              final escuro = themeService.temaEscuro;
-              return IconButton(
-                tooltip: escuro ? 'Alternar para tema claro' : 'Alternar para tema escuro',
-                onPressed: () async {
-                  await themeService.alternarTema();
-                },
-                icon: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 280),
-                  switchInCurve: Curves.easeOutBack,
-                  switchOutCurve: Curves.easeInBack,
-                  transitionBuilder: (child, anim) =>
-                      RotationTransition(turns: anim, child: ScaleTransition(scale: anim, child: child)),
-                  child: escuro
-                      ? const Icon(Icons.light_mode_rounded, key: ValueKey('light'), color: Color(0xFFFFD964))
-                      : const Icon(Icons.dark_mode_rounded, key: ValueKey('dark'), color: Color(0xFF3B3B50)),
-                ),
+          IconButton(
+            tooltip: 'Configurações',
+            onPressed: () {
+              exibirMenuConfiguracoes(
+                context,
+                abrirConfiguracoesLembrete: () => _abrirConfiguracoesLembrete(context),
               );
             },
+            icon: const Icon(Icons.tune_rounded),
           ),
           const SizedBox(width: 4),
         ],

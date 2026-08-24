@@ -1,6 +1,9 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
 import 'package:frontend/services/notificacao_service.dart';
+import 'package:frontend/services/auth_service.dart';
 
 class LembreteLeituraService with ChangeNotifier {
   bool _ligado = false;
@@ -77,10 +80,63 @@ class LembreteLeituraService with ChangeNotifier {
     await _aplicarAgendamento();
     await _salvarPreferencias();
     notifyListeners();
+    try {
+      await _enviarParaServidor();
+    } catch (_) {}
   }
 
   Future<void> alternarLigado() async {
     await atualizar(ligado: !_ligado);
+  }
+
+  Future<void> sincronizarDoServidor({bool aplicarLocal = true}) async {
+    try {
+      final http.Response r = await AuthService.get('/lembrete/preferencias');
+      if (r.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(r.bodyBytes)) as Map<String, dynamic>;
+        final bool ligado = data['ligado'] == true;
+        final int hora = (data['hora'] as num?)?.toInt() ?? 20;
+        final int minuto = (data['minuto'] as num?)?.toInt() ?? 0;
+        final TimeOfDay horario = TimeOfDay(hour: hora.clamp(0, 23), minute: minuto.clamp(0, 59));
+        final List<dynamic>? diasRaw = data['diasSemana'] as List<dynamic>?;
+        final List<int> dias = (diasRaw ?? const [1,2,3,4,5,6,7]).map((e) => (e as num).toInt().clamp(1, 7)).toList();
+        final bool mudou = ligado != _ligado
+            || horario.hour != _horario.hour
+            || horario.minute != _horario.minute
+            || dias.length != _dias.length
+            || !dias.toSet().containsAll(_dias);
+        if (!mudou) return;
+        _ligado = ligado;
+        _horario = horario;
+        _dias = List<int>.unmodifiable(dias);
+        if (aplicarLocal) {
+          await _aplicarAgendamento();
+          await _salvarPreferencias();
+        }
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _enviarParaServidor() async {
+    try {
+      final body = jsonEncode(<String, dynamic>{
+        'ligado': _ligado,
+        'hora': _horario.hour,
+        'minuto': _horario.minute,
+        'diasSemana': _dias,
+      });
+      final http.Response r = await AuthService.put('/lembrete/preferencias', body);
+      if (r.statusCode == 200) {
+        try {
+          final data = jsonDecode(utf8.decode(r.bodyBytes)) as Map<String, dynamic>;
+          final diasRaw = (data['diasSemana'] as List<dynamic>?)?.map((e) => (e as num).toInt()).toList();
+          if (diasRaw != null && diasRaw.isNotEmpty) {
+            _dias = List<int>.unmodifiable(diasRaw);
+          }
+        } catch (_) {}
+      }
+    } catch (_) {}
   }
 
   Future<void> _aplicarAgendamento() async {

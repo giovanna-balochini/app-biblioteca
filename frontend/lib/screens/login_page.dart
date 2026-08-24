@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:frontend/services/auth_service.dart';
+import 'package:frontend/services/lembrete_leitura_service.dart';
 import 'package:frontend/screens/lista_livros_page.dart';
 import 'package:frontend/screens/cadastro_page.dart';
 import 'package:frontend/utils/snackbars.dart';
@@ -35,6 +36,8 @@ class _LoginPageState extends State<LoginPage> {
     if (!mounted) return;
     setState(() => _carregando = false);
     if (resultado['sucesso'] == true) {
+      try { await lembreteLeituraService.sincronizarDoServidor(); } catch (_) {}
+      if (!mounted) return;
       mostrarSnackbarSucesso(context, 'Bem-vindo(a), ${AuthService.usuarioNome ?? 'Leitor'}!');
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const ListaLivrosPage()),
