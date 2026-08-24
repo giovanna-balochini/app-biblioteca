@@ -49,6 +49,7 @@ public class Notificacao {
     public enum TipoNotificacao {
         SEGUIR,
         AVALIACAO,
+        CURTIDA,
         MENSAGEM
     }
 

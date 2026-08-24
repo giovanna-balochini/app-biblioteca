@@ -36,6 +36,8 @@ public interface AvaliacaoRepository extends JpaRepository<Avaliacao, Long> {
 
     long countByAutor(Usuario autor);
 
+    long countByLivro(Livro livro);
+
     @Query("SELECT AVG(a.nota) FROM Avaliacao a WHERE a.autor = :autor")
     Double calcularMediaPorAutor(Usuario autor);
 

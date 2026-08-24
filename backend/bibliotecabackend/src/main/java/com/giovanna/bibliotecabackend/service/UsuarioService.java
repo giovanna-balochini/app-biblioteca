@@ -2,6 +2,7 @@ package com.giovanna.bibliotecabackend.service;
 
 import com.giovanna.bibliotecabackend.config.DataInitializer;
 import com.giovanna.bibliotecabackend.dto.PublicUserProfileDTO;
+import com.giovanna.bibliotecabackend.dto.UsuarioBuscaDTO;
 import com.giovanna.bibliotecabackend.model.Avaliacao;
 import com.giovanna.bibliotecabackend.model.Usuario;
 import com.giovanna.bibliotecabackend.repository.AvaliacaoRepository;
@@ -11,6 +12,7 @@ import com.giovanna.bibliotecabackend.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -68,7 +70,7 @@ public class UsuarioService {
         return obterUsuarioPadrao();
     }
 
-    private Optional<Usuario> obterUsuarioLogadoSeAutenticado() {
+    public Optional<Usuario> obterUsuarioLogadoSeAutenticado() {
         try {
             Authentication auth = SecurityContextHolder.getContext().getAuthentication();
             if (auth != null && auth.isAuthenticated() && auth.getPrincipal() instanceof Usuario u) {
@@ -117,5 +119,35 @@ public class UsuarioService {
         if (tamanho < 1 || tamanho > 100) tamanho = 20;
         PageRequest pageRequest = PageRequest.of(pagina, tamanho, Sort.by(Sort.Direction.DESC, "dataCriacao"));
         return avaliacaoRepository.findByAutorPaginado(u, pageRequest);
+    }
+
+    public Page<UsuarioBuscaDTO> buscarUsuarios(String q, int pagina, int tamanho) {
+        if (q == null || q.trim().isEmpty()) {
+            q = "";
+        }
+        if (pagina < 0) pagina = 0;
+        if (tamanho < 1 || tamanho > 50) tamanho = 20;
+        Pageable pageable = PageRequest.of(pagina, tamanho, Sort.by(Sort.Direction.ASC, "nome"));
+        Page<Usuario> paginaUsuarios = usuarioRepository.buscarPorNomeOuEmail(q.trim(), pageable);
+
+        Optional<Usuario> euOpt = obterUsuarioLogadoSeAutenticado();
+        Usuario eu = euOpt.orElse(null);
+
+        return paginaUsuarios.map(u -> {
+            boolean mesmoUsuario = eu != null && eu.getId() != null && u.getId() != null
+                    && eu.getId().equals(u.getId());
+            boolean estouSeguindo = !mesmoUsuario && eu != null
+                    && seguidorRepository.existsBySeguidorAndSeguido(eu, u);
+            boolean segueVoce = !mesmoUsuario && eu != null
+                    && seguidorRepository.existsBySeguidorAndSeguido(u, eu);
+            long totalLivros = livroRepository.countByDono(u);
+            long totalAvaliacoes = avaliacaoRepository.countByAutor(u);
+            Double media = avaliacaoRepository.calcularMediaPorAutor(u);
+            long totalSeguidores = seguidorRepository.countBySeguido(u);
+            return UsuarioBuscaDTO.fromEntity(
+                    u, totalLivros, totalAvaliacoes, media,
+                    totalSeguidores, estouSeguindo, segueVoce, mesmoUsuario
+            );
+        });
     }
 }

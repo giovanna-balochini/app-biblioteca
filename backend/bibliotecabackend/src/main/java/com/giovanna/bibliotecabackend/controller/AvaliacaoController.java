@@ -14,7 +14,6 @@ import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/livros/{livroId}/avaliacoes")
@@ -26,11 +25,8 @@ public class AvaliacaoController {
     @GetMapping
     public ResponseEntity<Map<String, Object>> listar(@PathVariable Long livroId) {
         try {
-            List<Avaliacao> lista = avaliacaoService.listarPorLivro(livroId);
+            List<AvaliacaoPublicaDTO> dtos = avaliacaoService.listarPorLivroDTO(livroId);
             Double media = avaliacaoService.mediaPorLivro(livroId);
-            List<AvaliacaoPublicaDTO> dtos = lista.stream()
-                    .map(AvaliacaoPublicaDTO::fromEntity)
-                    .collect(Collectors.toList());
             Map<String, Object> resposta = new LinkedHashMap<>();
             resposta.put("media", media);
             resposta.put("total", dtos.size());
@@ -58,7 +54,7 @@ public class AvaliacaoController {
                     request.getComentario(),
                     data
             );
-            return ResponseEntity.status(HttpStatus.CREATED).body(AvaliacaoPublicaDTO.fromEntity(salvo));
+            return ResponseEntity.status(HttpStatus.CREATED).body(avaliacaoService.aplicarCurtidas(salvo));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }

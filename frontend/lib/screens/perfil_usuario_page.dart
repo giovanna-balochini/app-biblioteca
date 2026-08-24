@@ -4,6 +4,7 @@ import 'package:frontend/services/auth_service.dart';
 import 'package:frontend/screens/detalhe_livro_page.dart';
 import 'package:frontend/screens/seguindo_seguidores_page.dart';
 import 'package:frontend/widgets/estrelas_avaliacao.dart';
+import 'package:frontend/widgets/botao_curtida_avaliacao.dart';
 import 'package:frontend/utils/formatters.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:typed_data';
@@ -832,19 +833,31 @@ class _PerfilUsuarioPageState extends State<PerfilUsuarioPage> {
                         ),
                       ),
                     ],
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton.icon(
-                        onPressed: () => _abrirLivro(item),
-                        style: TextButton.styleFrom(
-                          foregroundColor: corPrimaria,
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
-                          visualDensity: VisualDensity.compact,
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Flexible(
+                          child: BotaoCurtidaAvaliacao(
+                            avaliacao: item,
+                            tamanhoIcone: 19,
+                            compacto: true,
+                          ),
                         ),
-                        icon: const Icon(Icons.open_in_new_rounded, size: 13),
-                        label: const Text('Abrir livro',
-                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-                      ),
+                        Flexible(
+                          child: TextButton.icon(
+                            onPressed: () => _abrirLivro(item),
+                            style: TextButton.styleFrom(
+                              foregroundColor: corPrimaria,
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
+                              visualDensity: VisualDensity.compact,
+                            ),
+                            icon: const Icon(Icons.open_in_new_rounded, size: 13),
+                            label: const Text('Abrir livro',
+                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),

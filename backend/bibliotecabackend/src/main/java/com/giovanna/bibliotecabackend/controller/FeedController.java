@@ -1,7 +1,6 @@
 package com.giovanna.bibliotecabackend.controller;
 
-import com.giovanna.bibliotecabackend.dto.FeedItemDTO;
-import com.giovanna.bibliotecabackend.model.Avaliacao;
+import com.giovanna.bibliotecabackend.dto.AvaliacaoPublicaDTO;
 import com.giovanna.bibliotecabackend.service.AvaliacaoService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -10,7 +9,6 @@ import org.springframework.web.bind.annotation.*;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/feed")
@@ -25,10 +23,8 @@ public class FeedController {
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = "") String filtro
     ) {
-        Page<Avaliacao> pagina = avaliacaoService.listarFeed(page, size, filtro);
-        List<FeedItemDTO> itens = pagina.getContent().stream()
-                .map(FeedItemDTO::fromEntity)
-                .collect(Collectors.toList());
+        Page<AvaliacaoPublicaDTO> pagina = avaliacaoService.listarFeedDTO(page, size, filtro);
+        List<AvaliacaoPublicaDTO> itens = pagina.getContent();
 
         Map<String, Object> resposta = new LinkedHashMap<>();
         resposta.put("pagina", pagina.getNumber());

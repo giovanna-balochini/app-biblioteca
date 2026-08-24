@@ -6,6 +6,7 @@ import 'package:frontend/screens/detalhe_livro_page.dart';
 import 'package:frontend/screens/perfil_usuario_page.dart';
 import 'package:frontend/screens/notificacoes_page.dart';
 import 'package:frontend/widgets/estrelas_avaliacao.dart';
+import 'package:frontend/widgets/botao_curtida_avaliacao.dart';
 import 'package:frontend/utils/formatters.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:typed_data';
@@ -743,6 +744,7 @@ class _FeedPageState extends State<FeedPage> with AutomaticKeepAliveClientMixin 
                       ],
                       const SizedBox(height: 8),
                       Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           if (dataFormatada != null)
                             Expanded(
@@ -757,6 +759,12 @@ class _FeedPageState extends State<FeedPage> with AutomaticKeepAliveClientMixin 
                           else
                             const Spacer(),
                           const SizedBox(width: 8),
+                          BotaoCurtidaAvaliacao(
+                            avaliacao: item,
+                            tamanhoIcone: 20,
+                            compacto: true,
+                          ),
+                          const SizedBox(width: 2),
                           TextButton.icon(
                             onPressed: () => _abrirLivro(item),
                             style: TextButton.styleFrom(

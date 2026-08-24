@@ -96,4 +96,19 @@ public class NotificacaoService {
         n.setFotoUrl(avaliacao.getLivro().getImagem());
         notificacaoRepository.save(n);
     }
+
+    public void criarNotificacaoCurtida(Usuario autorDaAvaliacao, Usuario quemCurtiu, Avaliacao avaliacao) {
+        if (autorDaAvaliacao == null || quemCurtiu == null || avaliacao == null) return;
+        if (autorDaAvaliacao.getId().equals(quemCurtiu.getId())) return;
+        Notificacao n = new Notificacao();
+        n.setUsuario(autorDaAvaliacao);
+        n.setTipo(Notificacao.TipoNotificacao.CURTIDA);
+        String titulo = avaliacao.getLivro() != null ? avaliacao.getLivro().getTitulo() : "sua avaliação";
+        n.setConteudo("curtiu sua avaliação de \"" + titulo + "\"");
+        n.setAutor(quemCurtiu);
+        n.setDadoId(avaliacao.getId());
+        n.setDadoNome(titulo);
+        n.setFotoUrl(quemCurtiu.getFotoPerfil());
+        notificacaoRepository.save(n);
+    }
 }

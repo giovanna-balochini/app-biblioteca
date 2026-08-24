@@ -9,6 +9,7 @@ import 'package:frontend/services/auth_service.dart';
 import 'package:frontend/services/google_books_service.dart';
 import 'package:frontend/widgets/estrelas_avaliacao.dart';
 import 'package:frontend/widgets/info_tile.dart';
+import 'package:frontend/widgets/botao_curtida_avaliacao.dart';
 import 'package:frontend/utils/formatters.dart';
 import 'package:frontend/utils/snackbars.dart';
 import 'package:frontend/screens/perfil_usuario_page.dart';
@@ -1564,6 +1565,15 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
                                             ),
                                           ),
                                         ],
+                                        const SizedBox(height: 6),
+                                        Align(
+                                          alignment: Alignment.centerRight,
+                                          child: BotaoCurtidaAvaliacao(
+                                            avaliacao: av,
+                                            tamanhoIcone: 19,
+                                            compacto: true,
+                                          ),
+                                        ),
                                       ],
                                     ),
                                   ),

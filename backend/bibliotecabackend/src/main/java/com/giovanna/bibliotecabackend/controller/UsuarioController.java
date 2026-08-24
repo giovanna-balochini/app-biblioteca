@@ -2,9 +2,10 @@ package com.giovanna.bibliotecabackend.controller;
 
 import com.giovanna.bibliotecabackend.dto.AvaliacaoPublicaDTO;
 import com.giovanna.bibliotecabackend.dto.PublicUserProfileDTO;
-import com.giovanna.bibliotecabackend.model.Avaliacao;
+import com.giovanna.bibliotecabackend.dto.UsuarioBuscaDTO;
 import com.giovanna.bibliotecabackend.model.Seguidor;
 import com.giovanna.bibliotecabackend.model.Usuario;
+import com.giovanna.bibliotecabackend.service.AvaliacaoService;
 import com.giovanna.bibliotecabackend.service.SeguidorService;
 import com.giovanna.bibliotecabackend.service.UsuarioService;
 import lombok.RequiredArgsConstructor;
@@ -16,7 +17,6 @@ import org.springframework.web.bind.annotation.*;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/usuarios")
@@ -25,10 +25,28 @@ public class UsuarioController {
 
     private final UsuarioService usuarioService;
     private final SeguidorService seguidorService;
+    private final AvaliacaoService avaliacaoService;
 
     @GetMapping
     public List<Usuario> listarTodos() {
         return usuarioService.listarTodos();
+    }
+
+    @GetMapping("/buscar")
+    public ResponseEntity<Map<String, Object>> buscarUsuarios(
+            @RequestParam(defaultValue = "") String q,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        Page<UsuarioBuscaDTO> pagina = usuarioService.buscarUsuarios(q, page, size);
+        Map<String, Object> resposta = new LinkedHashMap<>();
+        resposta.put("pagina", pagina.getNumber());
+        resposta.put("tamanhoPagina", pagina.getSize());
+        resposta.put("totalElementos", pagina.getTotalElements());
+        resposta.put("totalPaginas", pagina.getTotalPages());
+        resposta.put("ultima", pagina.isLast());
+        resposta.put("itens", pagina.getContent());
+        return ResponseEntity.ok(resposta);
     }
 
     @GetMapping("/{id}")
@@ -47,10 +65,8 @@ public class UsuarioController {
         if (!usuarioService.buscarPorId(id).isPresent()) {
             return ResponseEntity.notFound().build();
         }
-        Page<Avaliacao> pagina = usuarioService.listarAvaliacoesPublicasDoUsuario(id, page, size);
-        List<AvaliacaoPublicaDTO> itens = pagina.getContent().stream()
-                .map(AvaliacaoPublicaDTO::fromEntity)
-                .collect(Collectors.toList());
+        Page<AvaliacaoPublicaDTO> pagina = avaliacaoService.listarPorAutorDTO(id, page, size);
+        List<AvaliacaoPublicaDTO> itens = pagina.getContent();
 
         Map<String, Object> resposta = new LinkedHashMap<>();
         resposta.put("pagina", pagina.getNumber());

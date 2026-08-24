@@ -22,6 +22,8 @@ public class AvaliacaoPublicaDTO {
     private LocalDate dataConclusao;
     private LocalDateTime dataCriacao;
     private LocalDateTime dataAtualizacao;
+    private long totalCurtidas;
+    private boolean curtiEu;
 
     public static AvaliacaoPublicaDTO fromEntity(Avaliacao a) {
         AvaliacaoPublicaDTO dto = new AvaliacaoPublicaDTO();
