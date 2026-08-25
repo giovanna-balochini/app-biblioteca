@@ -11,6 +11,7 @@ import 'package:frontend/screens/notificacoes_page.dart';
 import 'package:frontend/widgets/estrelas_avaliacao.dart';
 import 'package:frontend/widgets/capa_livro.dart';
 import 'package:frontend/widgets/menu_configuracoes_bottomsheet.dart';
+import 'package:frontend/widgets/status_progresso_leitura.dart';
 import 'package:frontend/utils/formatters.dart';
 import 'package:frontend/utils/snackbars.dart';
 
@@ -1342,6 +1343,12 @@ class _ListaLivrosPageState extends State<ListaLivrosPage> {
                                 );
                               }
                               final livro = _livrosPaginados[index];
+                              final progressoInfo = InfoProgressoLivro.fromMap(livro);
+                              final statusTxt = livro['statusLeitura']?.toString().toUpperCase();
+                              final statusDisplay = statusTxt == 'QUERO_LER' || statusTxt == 'LENDO' || statusTxt == 'LIDO'
+                                  ? statusTxt
+                                  : (livro['lido'] == true ? 'LIDO' : 'QUERO_LER');
+                              final ehLendo = statusDisplay == 'LENDO' && progressoInfo.totalPaginas != null;
                               return Padding(
                                 padding: const EdgeInsets.only(bottom: 12),
                                 child: Card(
@@ -1366,8 +1373,37 @@ class _ListaLivrosPageState extends State<ListaLivrosPage> {
                                             avaliacao: livro['avaliacao'] is int ? livro['avaliacao'] : (livro['avaliacao'] is double ? (livro['avaliacao'] as double).toInt() : null),
                                             tamanho: 15,
                                           ),
+                                          const SizedBox(height: 8),
+                                          Wrap(
+                                            spacing: 8,
+                                            runSpacing: 6,
+                                            crossAxisAlignment: WrapCrossAlignment.center,
+                                            children: [
+                                              ChipStatusLeitura(status: statusDisplay, compacto: true),
+                                              if (ehLendo)
+                                                Text(
+                                                  '${progressoInfo.paginaAtual ?? 0}/${progressoInfo.totalPaginas} · ${progressoInfo.progresso.toInt()}%',
+                                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                                        fontWeight: FontWeight.w700,
+                                                        color: const Color(0xFF6B3AFF),
+                                                      ),
+                                                ),
+                                            ],
+                                          ),
+                                          if (ehLendo) ...[
+                                            const SizedBox(height: 8),
+                                            ClipRRect(
+                                              borderRadius: BorderRadius.circular(999),
+                                              child: LinearProgressIndicator(
+                                                value: (progressoInfo.progresso / 100).clamp(0.0, 1.0),
+                                                minHeight: 4,
+                                                backgroundColor: const Color(0xFF7C4DFF).withValues(alpha: 0.16),
+                                                valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF7C4DFF)),
+                                              ),
+                                            ),
+                                          ],
                                           if (livro['lido'] == true) ...[
-                                            if (formatarDataCurta(livro['dataConclusao']?.toString()).isNotEmpty) ...[
+                                            if (formatarDataCurta(livro['dataConclusao']?.toString() ?? livro['dataFimLeitura']?.toString()).isNotEmpty) ...[
                                               const SizedBox(height: 6),
                                               Row(
                                                 mainAxisSize: MainAxisSize.min,
@@ -1375,7 +1411,7 @@ class _ListaLivrosPageState extends State<ListaLivrosPage> {
                                                   const Icon(Icons.event_available_rounded, size: 12, color: Color(0xFF2E7D32)),
                                                   const SizedBox(width: 4),
                                                   Text(
-                                                    'Concluído em ${formatarDataCurta(livro['dataConclusao']?.toString())}',
+                                                    'Concluído em ${formatarDataCurta(livro['dataConclusao']?.toString() ?? livro['dataFimLeitura']?.toString())}',
                                                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                                           color: const Color(0xFF2E7D32),
                                                           fontWeight: FontWeight.w600,
@@ -1388,15 +1424,35 @@ class _ListaLivrosPageState extends State<ListaLivrosPage> {
                                         ],
                                       ),
                                     ),
-                                    trailing: Container(
-                                      width: 36,
-                                      height: 36,
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(12),
-                                        color: const Color(0xFFF1EEFF),
-                                      ),
-                                      child: const Icon(Icons.chevron_right_rounded, color: Color(0xFF7C4DFF)),
-                                    ),
+                                    trailing: ehLendo
+                                        ? SizedBox(
+                                            width: 44,
+                                            height: 44,
+                                            child: BarraProgressoCircular(
+                                              percentual: progressoInfo.progresso,
+                                              tamanho: 44,
+                                              espessura: 4.2,
+                                              corFundo: const Color(0xFF7C4DFF).withValues(alpha: 0.2),
+                                              corPrimaria: const Color(0xFF7C4DFF),
+                                              centro: Text(
+                                                '${progressoInfo.progresso.toInt()}%',
+                                                style: const TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w800,
+                                                  color: Color(0xFF5A33E0),
+                                                ),
+                                              ),
+                                            ),
+                                          )
+                                        : Container(
+                                            width: 36,
+                                            height: 36,
+                                            decoration: BoxDecoration(
+                                              borderRadius: BorderRadius.circular(12),
+                                              color: const Color(0xFFF1EEFF),
+                                            ),
+                                            child: const Icon(Icons.chevron_right_rounded, color: Color(0xFF7C4DFF)),
+                                          ),
                                     onTap: () async {
                                       final resultado = await Navigator.push(
                                         context,

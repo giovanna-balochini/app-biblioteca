@@ -1,7 +1,10 @@
 package com.giovanna.bibliotecabackend.dto;
 
 import com.giovanna.bibliotecabackend.model.Livro;
+import com.giovanna.bibliotecabackend.model.StatusLeitura;
 import lombok.Data;
+
+import java.time.LocalDate;
 
 @Data
 public class LivroBuscaDTO {
@@ -13,6 +16,12 @@ public class LivroBuscaDTO {
     private String descricao;
     private String imagem;
     private boolean lido;
+    private String statusLeitura;
+    private Integer paginaAtual;
+    private Integer totalPaginas;
+    private double progressoPercentual;
+    private LocalDate dataInicioLeitura;
+    private LocalDate dataFimLeitura;
     private Long donoId;
     private String donoNome;
     private String donoFotoPerfil;
@@ -35,6 +44,12 @@ public class LivroBuscaDTO {
         dto.setDescricao(l.getDescricao());
         dto.setImagem(l.getImagem());
         dto.setLido(l.isLido());
+        dto.setStatusLeitura((l.getStatusLeitura() == null ? StatusLeitura.QUERO_LER : l.getStatusLeitura()).name());
+        dto.setPaginaAtual(l.getPaginaAtual());
+        dto.setTotalPaginas(l.getTotalPaginas());
+        dto.setProgressoPercentual(l.getProgressoPercentual());
+        dto.setDataInicioLeitura(l.getDataInicioLeitura());
+        dto.setDataFimLeitura(l.getDataFimLeitura());
         if (l.getDono() != null) {
             dto.setDonoId(l.getDono().getId());
             dto.setDonoNome(l.getDono().getNome());

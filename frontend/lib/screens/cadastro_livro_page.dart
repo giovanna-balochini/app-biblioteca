@@ -7,6 +7,7 @@ import 'dart:typed_data';
 import 'package:frontend/services/auth_service.dart';
 import 'package:frontend/services/google_books_service.dart';
 import 'package:frontend/widgets/estrelas_avaliacao.dart';
+import 'package:frontend/widgets/status_progresso_leitura.dart';
 import 'package:frontend/utils/formatters.dart';
 import 'package:frontend/utils/snackbars.dart';
 
@@ -31,6 +32,10 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
   String? _tituloDaCapa;
   bool _jaAvisouLimiteDesc = false;
   bool _lido = false;
+  String _statusLeitura = 'QUERO_LER';
+  final _totalPaginasController = TextEditingController();
+  final _paginaAtualController = TextEditingController();
+  DateTime? _dataInicio;
   int? _avaliacao;
   DateTime? _dataConclusao;
   Uint8List? _capaBytes;
@@ -90,6 +95,25 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
     );
     if (data != null) {
       setState(() => _dataConclusao = data);
+    }
+  }
+
+  Future<void> _selecionarDataInicio() async {
+    final hoje = DateTime.now();
+    final data = await showDatePicker(
+      context: context,
+      initialDate: _dataInicio ?? hoje,
+      firstDate: DateTime(1900),
+      lastDate: hoje,
+      locale: const Locale('pt', 'BR'),
+      confirmText: 'Confirmar',
+      cancelText: 'Cancelar',
+      fieldLabelText: 'Data de início',
+      fieldHintText: 'dd/mm/aaaa',
+      helpText: 'Quando você começou a ler?',
+    );
+    if (data != null) {
+      setState(() => _dataInicio = data);
     }
   }
 
@@ -290,6 +314,8 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
     final dataParaEnviar = _lido && _dataConclusao != null
         ? formatarDataISO(_dataConclusao)
         : null;
+    final totalPaginas = int.tryParse(_totalPaginasController.text.trim());
+    final paginaAtual = int.tryParse(_paginaAtualController.text.trim());
 
     final livro = {
       'titulo': _tituloController.text.trim(),
@@ -299,6 +325,12 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
       'descricao': _descricaoController.text.trim(),
       'imagem': imagemParaSalvar,
       'lido': _lido,
+      'statusLeitura': _statusLeitura,
+      if (totalPaginas != null) 'totalPaginas': totalPaginas,
+      if (paginaAtual != null) 'paginaAtual': paginaAtual,
+      if (_dataInicio != null) 'dataInicioLeitura': formatarDataISO(_dataInicio),
+      if (_dataConclusao != null && _statusLeitura.toUpperCase() == 'LIDO')
+        'dataFimLeitura': formatarDataISO(_dataConclusao),
     };
 
     try {
@@ -350,6 +382,8 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
     _editoraController.dispose();
     _generoController.dispose();
     _descricaoController.dispose();
+    _totalPaginasController.dispose();
+    _paginaAtualController.dispose();
     super.dispose();
   }
 
@@ -367,6 +401,69 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
           fontFamily: 'Diphylleia',
           fontSize: 24,
           letterSpacing: 0.1,
+        ),
+      ),
+    );
+  }
+
+  Widget _botaoStatus(String status, IconData icone, String rotulo) {
+    final info = infoStatusLeitura(status);
+    final selecionado = _statusLeitura == status;
+    return Expanded(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () {
+            setState(() {
+              _statusLeitura = status;
+              if (status == 'LIDO') {
+                _lido = true;
+              } else {
+                _lido = false;
+              }
+            });
+          },
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOut,
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+            decoration: BoxDecoration(
+              color: selecionado
+                  ? info.cor
+                  : (Theme.of(context).brightness == Brightness.dark
+                      ? const Color(0xFF111118)
+                      : Colors.white),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: selecionado ? info.cor : (Theme.of(context).brightness == Brightness.dark
+                    ? const Color(0xFF2A2A38)
+                    : const Color(0xFFDDD5F2)),
+                width: 1.2,
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icone,
+                  color: selecionado ? Colors.white : info.cor,
+                  size: 20,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  rotulo,
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        fontWeight: selecionado ? FontWeight.w800 : FontWeight.w600,
+                        color: selecionado ? Colors.white : info.cor,
+                      ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -711,6 +808,149 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
                         ),
                         const SizedBox(height: 16),
                       ],
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.fromLTRB(14, 12, 14, 16),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? const Color(0xFF1C1C27)
+                              : const Color(0xFFF3F0FF),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: Theme.of(context).brightness == Brightness.dark
+                                ? const Color(0xFF2B2B38)
+                                : const Color(0xFFE0D6FF),
+                            width: 1,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.bar_chart_rounded,
+                                    color: Color(0xFF7C4DFF), size: 24),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    'Progresso da leitura (opcional)',
+                                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 16,
+                                        ),
+                                  ),
+                                ),
+                                ChipStatusLeitura(status: _statusLeitura),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                _botaoStatus('QUERO_LER', Icons.bookmark_border_rounded, 'Quero ler'),
+                                const SizedBox(width: 8),
+                                _botaoStatus('LENDO', Icons.menu_book_rounded, 'Lendo'),
+                                const SizedBox(width: 8),
+                                _botaoStatus('LIDO', Icons.check_circle_rounded, 'Lido'),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: TextFormField(
+                                    controller: _totalPaginasController,
+                                    keyboardType: TextInputType.number,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Total de páginas',
+                                      prefixIcon: Icon(Icons.menu_book_rounded, color: Color(0xFF7C4DFF)),
+                                      hintText: 'Ex: 280',
+                                    ),
+                                    onChanged: (v) => setState(() {}),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: TextFormField(
+                                    controller: _paginaAtualController,
+                                    keyboardType: TextInputType.number,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Página atual',
+                                      prefixIcon: Icon(Icons.label_important_rounded, color: Color(0xFF7C4DFF)),
+                                      hintText: 'Ex: 47',
+                                    ),
+                                    onChanged: (v) => setState(() {}),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (_statusLeitura == 'LENDO' || _statusLeitura == 'LIDO') ...[
+                              const SizedBox(height: 12),
+                              TextFormField(
+                                readOnly: true,
+                                controller: TextEditingController(text: formatarData(_dataInicio)),
+                                onTap: _selecionarDataInicio,
+                                decoration: InputDecoration(
+                                  labelText: 'Data de início',
+                                  prefixIcon: const Icon(Icons.event_available_rounded,
+                                      color: Color(0xFF7C4DFF)),
+                                  suffixIcon: _dataInicio != null
+                                      ? IconButton(
+                                          icon: const Icon(Icons.close, color: Color(0xFF7C4DFF)),
+                                          onPressed: () => setState(() => _dataInicio = null),
+                                          tooltip: 'Limpar data',
+                                        )
+                                      : null,
+                                  hintText: 'Quando você começou?',
+                                ),
+                              ),
+                              if (_statusLeitura == 'LIDO')
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 12),
+                                  child: TextFormField(
+                                    readOnly: true,
+                                    controller: TextEditingController(text: formatarData(_dataConclusao)),
+                                    onTap: _selecionarData,
+                                    decoration: InputDecoration(
+                                      labelText: 'Data de conclusão',
+                                      prefixIcon: const Icon(Icons.celebration_rounded,
+                                          color: Color(0xFF2E7D32)),
+                                      suffixIcon: _dataConclusao != null
+                                          ? IconButton(
+                                              icon: const Icon(Icons.close, color: Color(0xFF7C4DFF)),
+                                              onPressed: () => setState(() => _dataConclusao = null),
+                                              tooltip: 'Limpar data',
+                                            )
+                                          : null,
+                                      hintText: 'Quando terminou de ler?',
+                                    ),
+                                  ),
+                                ),
+                            ],
+                            if (_statusLeitura == 'LENDO' &&
+                                int.tryParse(_totalPaginasController.text) != null &&
+                                int.tryParse(_totalPaginasController.text)! > 0) ...[
+                              const SizedBox(height: 14),
+                              Builder(
+                                builder: (_) {
+                                  final tot = int.tryParse(_totalPaginasController.text)!;
+                                  final at = int.tryParse(_paginaAtualController.text) ?? 0;
+                                  final p = ((at.clamp(0, tot) * 100) / tot).clamp(0, 100);
+                                  return ClipRRect(
+                                    borderRadius: BorderRadius.circular(999),
+                                    child: LinearProgressIndicator(
+                                      value: p / 100,
+                                      minHeight: 6,
+                                      backgroundColor: const Color(0xFF7C4DFF).withValues(alpha: 0.15),
+                                      valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF7C4DFF)),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),

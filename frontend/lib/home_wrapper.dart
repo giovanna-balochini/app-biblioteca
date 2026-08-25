@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'screens/lista_livros_page.dart';
+import 'screens/minha_leitura_page.dart';
 import 'screens/busca_page.dart';
 import 'screens/feed_page.dart';
 
@@ -15,6 +16,7 @@ class _HomeWrapperState extends State<HomeWrapper> {
   final PageStorageBucket _bucket = PageStorageBucket();
   final List<Widget> _abas = const [
     ListaLivrosPage(),
+    MinhaLeituraPage(),
     BuscaPage(),
     FeedPage(),
   ];
@@ -24,6 +26,11 @@ class _HomeWrapperState extends State<HomeWrapper> {
       iconeAtivo: Icons.local_library_rounded,
       iconeInativo: Icons.local_library_outlined,
       rotulo: 'Biblioteca',
+    ),
+    _AbaNav(
+      iconeAtivo: Icons.menu_book_rounded,
+      iconeInativo: Icons.menu_book_outlined,
+      rotulo: 'Minha leitura',
     ),
     _AbaNav(
       iconeAtivo: Icons.search_rounded,
@@ -47,8 +54,9 @@ class _HomeWrapperState extends State<HomeWrapper> {
         index: _abaAtual,
         children: [
           PageStorage(bucket: _bucket, key: const ValueKey('biblioteca'), child: _abas[0]),
-          PageStorage(bucket: _bucket, key: const ValueKey('busca'), child: _abas[1]),
-          PageStorage(bucket: _bucket, key: const ValueKey('feed'), child: _abas[2]),
+          PageStorage(bucket: _bucket, key: const ValueKey('minha-leitura'), child: _abas[1]),
+          PageStorage(bucket: _bucket, key: const ValueKey('busca'), child: _abas[2]),
+          PageStorage(bucket: _bucket, key: const ValueKey('feed'), child: _abas[3]),
         ],
       ),
       bottomNavigationBar: NavigationBarTheme(
