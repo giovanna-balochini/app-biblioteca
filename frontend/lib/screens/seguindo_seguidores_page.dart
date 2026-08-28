@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:frontend/services/auth_service.dart';
 import 'package:frontend/screens/perfil_usuario_page.dart';
+import 'package:frontend/widgets/empty_state.dart';
+import '../widgets/skeletons.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:typed_data';
 
@@ -264,13 +266,31 @@ class _ListaRelacionamentoState extends State<_ListaRelacionamento>
     const corPrimaria = Color(0xFF7C4DFF);
 
     if (_carregando) {
-      return Center(
-        child: SizedBox(
-          width: 24,
-          height: 24,
-          child: CircularProgressIndicator(
-            strokeWidth: 2.5,
-            color: corPrimaria,
+      return Scaffold(
+        appBar: AppBar(title: const Text('')),
+        body: SafeArea(
+          child: ShimmerBase(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: List.generate(5, (_) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  child: Row(
+                    children: [
+                      const BlocoSkeleton(largura: 46, altura: 46, raio: 99),
+                      const SizedBox(width: 14),
+                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        const BlocoSkeleton(largura: 160, altura: 14, raio: 7),
+                        const SizedBox(height: 6),
+                        const BlocoSkeleton(largura: 90, altura: 12, raio: 6),
+                      ])),
+                      const BlocoSkeleton(largura: 80, altura: 32, raio: 99),
+                    ],
+                  ),
+                )),
+              ),
+            ),
           ),
         ),
       );
@@ -301,9 +321,6 @@ class _ListaRelacionamentoState extends State<_ListaRelacionamento>
     }
 
     if (_itens.isEmpty) {
-      final msg = widget.tipo == 'seguindo'
-          ? 'Ainda não segue ninguém.'
-          : 'Ainda não tem seguidores.';
       return RefreshIndicator(
         color: corPrimaria,
         onRefresh: _carregarTudo,
@@ -312,49 +329,17 @@ class _ListaRelacionamentoState extends State<_ListaRelacionamento>
           slivers: [
             SliverFillRemaining(
               hasScrollBody: false,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: 72,
-                      height: 72,
-                      decoration: BoxDecoration(
-                        color: corPrimaria.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(22),
-                      ),
-                      alignment: Alignment.center,
-                      child: Icon(
-                        widget.tipo == 'seguindo'
-                            ? Icons.people_alt_outlined
-                            : Icons.person_search_rounded,
-                        size: 34,
-                        color: corPrimaria,
-                      ),
+              child: widget.tipo == 'seguindo'
+                  ? const EmptyState(
+                      icone: Icons.person_add_rounded,
+                      titulo: "Ainda não segue ninguém",
+                      descricao: "Siga autores e leitores para acompanhar suas avaliações e recomendações.",
+                    )
+                  : const EmptyState(
+                      icone: Icons.people_outline_rounded,
+                      titulo: "Sem seguidores ainda",
+                      descricao: "Continue avaliando e compartilhando suas leituras para atrair seguidores!",
                     ),
-                    const SizedBox(height: 16),
-                    Text(
-                      msg,
-                      textAlign: TextAlign.center,
-                      style: tema.textTheme.titleMedium?.copyWith(
-                            color: const Color(0xFF4A4A5E),
-                            fontWeight: FontWeight.w800,
-                          ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      widget.tipo == 'seguindo'
-                          ? 'Quando seguir outros leitores, eles aparecerão aqui.'
-                          : 'Quando outras pessoas começarem a seguir, aparecerão aqui.',
-                      textAlign: TextAlign.center,
-                      style: tema.textTheme.bodySmall?.copyWith(
-                            color: const Color(0xFF8A8A9D),
-                          ),
-                    ),
-                  ],
-                ),
-              ),
             ),
           ],
         ),

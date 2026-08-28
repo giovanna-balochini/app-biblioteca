@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import '../services/auth_service.dart';
 import '../widgets/capa_livro.dart';
+import '../widgets/empty_state.dart';
 import '../widgets/status_progresso_leitura.dart';
 import '../utils/snackbars.dart';
+import '../utils/transitions.dart';
+import '../widgets/skeletons.dart';
 import 'detalhe_livro_page.dart';
 
 class MinhaLeituraPage extends StatefulWidget {
@@ -227,7 +230,7 @@ class _MinhaLeituraPageState extends State<MinhaLeituraPage>
           if (_resumo != null) _HeaderResumo(resumo: _resumo!),
           Expanded(
             child: _carregando
-                ? const Center(child: CircularProgressIndicator())
+                ? const SkeletonListaLivros()
                 : _erro != null
                     ? Center(child: Text(_erro!))
                     : RefreshIndicator(
@@ -238,15 +241,28 @@ class _MinhaLeituraPageState extends State<MinhaLeituraPage>
                           children: [
                             _ListaLivros(
                               livros: _listas['QUERO_LER']!,
-                              vazioTexto: 'Você ainda não tem livros na lista "Quero ler".',
+                              widgetVazio: EmptyState(
+                                icone: Icons.bookmark_border_rounded,
+                                titulo: "Nenhum livro salvo na lista",
+                                descricao: "Adicione livros que deseja ler para nunca mais esquecer o que quer descobrir.",
+                                rotuloBotao: "Buscar livros",
+                                iconeBotao: Icons.search_rounded,
+                                aoClicarBotao: () => DefaultTabController.of(context).animateTo(2),
+                              ),
                               onAbrir: (l) => _abrirLivro(l),
                               aoMudarStatus: (l, novo) => _mudarStatus(l, novo),
                               builderBotoes: (_) => const SizedBox.shrink(),
                             ),
                             _ListaLivros(
                               livros: _listas['LENDO']!,
-                              vazioTexto:
-                                  'Nenhum livro em andamento. Toque em "Começar a ler" no card do livro "Quero ler".',
+                              widgetVazio: EmptyState(
+                                icone: Icons.menu_book_rounded,
+                                titulo: "Nenhuma leitura em andamento",
+                                descricao: "Comece um livro hoje. Acompanhe seu progresso página por página!",
+                                rotuloBotao: "Ver minha biblioteca",
+                                iconeBotao: Icons.local_library_rounded,
+                                aoClicarBotao: () => Navigator.of(context).pop(),
+                              ),
                               onAbrir: _abrirLivro,
                               aoMudarStatus: _mudarStatus,
                               builderBotoes: (l) => _BotoesProgresso(
@@ -258,7 +274,14 @@ class _MinhaLeituraPageState extends State<MinhaLeituraPage>
                             ),
                             _ListaLivros(
                               livros: _listas['LIDO']!,
-                              vazioTexto: 'Nenhum livro concluído ainda. Continue lendo! 📚',
+                              widgetVazio: EmptyState(
+                                icone: Icons.check_circle_outline_rounded,
+                                titulo: "Nenhum livro concluído ainda",
+                                descricao: "Termine de ler seu primeiro livro e registre a conquista aqui!",
+                                rotuloBotao: "Ir para livros lendo",
+                                iconeBotao: Icons.play_arrow_rounded,
+                                aoClicarBotao: () => DefaultTabController.of(context).animateTo(1),
+                              ),
                               onAbrir: _abrirLivro,
                               aoMudarStatus: _mudarStatus,
                               builderBotoes: (_) => const SizedBox.shrink(),
@@ -283,10 +306,7 @@ class _MinhaLeituraPageState extends State<MinhaLeituraPage>
       'autor': autor,
       'imagem': imagem,
     };
-    await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => DetalheLivroPage(livro: min)),
-    );
+    await navegarComAnimacao(context, DetalheLivroPage(livro: min is Map<String,dynamic> ? min : Map<String,dynamic>.from(min as Map)));
     await _carregarTudo();
   }
 
@@ -450,13 +470,13 @@ class _Estatistica extends StatelessWidget {
 
 class _ListaLivros extends StatelessWidget {
   final List<dynamic> livros;
-  final String vazioTexto;
+  final Widget widgetVazio;
   final void Function(Map) onAbrir;
   final void Function(Map, String) aoMudarStatus;
   final Widget Function(Map) builderBotoes;
   const _ListaLivros({
     required this.livros,
-    required this.vazioTexto,
+    required this.widgetVazio,
     required this.onAbrir,
     required this.aoMudarStatus,
     required this.builderBotoes,
@@ -471,24 +491,7 @@ class _ListaLivros extends StatelessWidget {
           child: Container(
             constraints: BoxConstraints(minHeight: c.maxHeight),
             alignment: Alignment.center,
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.auto_stories_rounded,
-                    size: 44,
-                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.45)),
-                const SizedBox(height: 10),
-                Text(vazioTexto,
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onSurface
-                              .withValues(alpha: 0.65),
-                        )),
-              ],
-            ),
+            child: widgetVazio,
           ),
         );
       });
@@ -528,7 +531,7 @@ class _CardLivroLeitura extends StatelessWidget {
     final tema = Theme.of(context);
     final escuro = tema.brightness == Brightness.dark;
     final info = InfoProgressoLivro.fromMap(livro);
-    final sInfo = infoStatusLeitura(info.status);
+    final sInfo = infoStatusLeitura(context, info.status);
     final temProgresso = info.totalPaginas != null && info.totalPaginas! > 0
         && info.status?.toUpperCase() == 'LENDO';
 
@@ -555,7 +558,7 @@ class _CardLivroLeitura extends StatelessWidget {
                     height: 86,
                     child: ClipRRect(
                         borderRadius: BorderRadius.circular(10),
-                        child: CapaLivro(livro: livro)),
+                        child: CapaLivro(livro: livro, heroTag: heroTagLivro(livro))),
                   ),
                   const SizedBox(width: 12),
                   Expanded(

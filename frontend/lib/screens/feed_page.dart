@@ -7,7 +7,10 @@ import 'package:frontend/screens/perfil_usuario_page.dart';
 import 'package:frontend/screens/notificacoes_page.dart';
 import 'package:frontend/widgets/estrelas_avaliacao.dart';
 import 'package:frontend/widgets/botao_curtida_avaliacao.dart';
+import 'package:frontend/widgets/empty_state.dart';
 import 'package:frontend/utils/formatters.dart';
+import 'package:frontend/utils/transitions.dart';
+import 'package:frontend/widgets/skeletons.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:typed_data';
 
@@ -131,9 +134,7 @@ class _FeedPageState extends State<FeedPage> with AutomaticKeepAliveClientMixin 
       'imagem': item['livroCapa'],
       'lido': true,
     };
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => DetalheLivroPage(livro: livro)),
-    );
+    await navegarComAnimacao(context, DetalheLivroPage(livro: livro is Map<String,dynamic> ? livro : Map<String,dynamic>.from(livro as Map)));
   }
 
   Future<void> _abrirPerfil(Map<String, dynamic> item) async {
@@ -396,9 +397,8 @@ class _FeedPageState extends State<FeedPage> with AutomaticKeepAliveClientMixin 
             ),
           ),
           if (_carregando)
-            const SliverFillRemaining(
-              hasScrollBody: false,
-              child: Center(child: CircularProgressIndicator(color: Color(0xFF7C4DFF))),
+            const SliverToBoxAdapter(
+              child: SkeletonListaFeed(qtd: 3),
             )
           else if (_erro && _itens.isEmpty)
             SliverFillRemaining(
@@ -540,37 +540,10 @@ class _FeedPageState extends State<FeedPage> with AutomaticKeepAliveClientMixin 
   }
 
   Widget _buildVazio(ThemeData tema, Color corPrimaria) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                color: corPrimaria.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(24),
-              ),
-              alignment: Alignment.center,
-              child: Icon(Icons.post_add_rounded, size: 40, color: corPrimaria),
-            ),
-            const SizedBox(height: 18),
-            Text(
-              'Nenhuma avaliação publicada ainda.',
-              style: tema.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Seja o primeiro a publicar uma avaliação em qualquer livro!\n\nPuxe para baixo para atualizar.',
-              style: tema.textTheme.bodyMedium?.copyWith(color: const Color(0xFF6B6B80)),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
+    return const EmptyState(
+      icone: Icons.auto_awesome_rounded,
+      titulo: "Feed começando do zero",
+      descricao: "Siga pessoas interessantes e avalie livros para o feed começar a aparecer por aqui.",
     );
   }
 
@@ -616,12 +589,20 @@ class _FeedPageState extends State<FeedPage> with AutomaticKeepAliveClientMixin 
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SizedBox(
-                  width: 82,
-                  height: 120,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: _construirCapa(livroCapa, livroTitulo, tema),
+                Hero(
+                  tag: heroTagLivro({
+                    'id': item['livroId'],
+                    'titulo': item['livroTitulo'],
+                    'autor': item['livroAutor'],
+                  }),
+                  transitionOnUserGestures: true,
+                  child: SizedBox(
+                    width: 82,
+                    height: 120,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: _construirCapa(livroCapa, livroTitulo, tema),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),

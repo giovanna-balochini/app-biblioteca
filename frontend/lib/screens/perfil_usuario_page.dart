@@ -5,7 +5,10 @@ import 'package:frontend/screens/detalhe_livro_page.dart';
 import 'package:frontend/screens/seguindo_seguidores_page.dart';
 import 'package:frontend/widgets/estrelas_avaliacao.dart';
 import 'package:frontend/widgets/botao_curtida_avaliacao.dart';
+import 'package:frontend/widgets/empty_state.dart';
+import 'package:frontend/widgets/skeletons.dart';
 import 'package:frontend/utils/formatters.dart';
+import 'package:frontend/utils/transitions.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:typed_data';
 
@@ -201,9 +204,7 @@ class _PerfilUsuarioPageState extends State<PerfilUsuarioPage> {
       'imagem': item['livroCapa'],
       'lido': true,
     };
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => DetalheLivroPage(livro: livro)),
-    );
+    await navegarComAnimacao(context, DetalheLivroPage(livro: livro is Map<String,dynamic> ? livro : Map<String,dynamic>.from(livro as Map)));
   }
 
   @override
@@ -273,10 +274,30 @@ class _PerfilUsuarioPageState extends State<PerfilUsuarioPage> {
         mainAxisSize: MainAxisSize.min,
         children: [
           _carregandoPerfil
-              ? const SizedBox(
-                  width: 100,
-                  height: 100,
-                  child: CircularProgressIndicator(color: Color(0xFF7C4DFF)),
+              ? Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
+                  child: ShimmerBase(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const BlocoSkeleton(largura: 96, altura: 96, raio: 99),
+                        const SizedBox(height: 16),
+                        BlocoSkeleton(largura: MediaQuery.of(context).size.width * 0.45, altura: 20, raio: 8),
+                        const SizedBox(height: 8),
+                        BlocoSkeleton(largura: MediaQuery.of(context).size.width * 0.3, altura: 13, raio: 6),
+                        const SizedBox(height: 18),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: const [
+                            BlocoSkeleton(largura: 68, altura: 34, raio: 12),
+                            BlocoSkeleton(largura: 68, altura: 34, raio: 12),
+                            BlocoSkeleton(largura: 68, altura: 34, raio: 12),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                      ],
+                    ),
+                  ),
                 )
               : _erroPerfil
                   ? _buildErroMinicard(tema, corPrimaria)
@@ -647,10 +668,7 @@ class _PerfilUsuarioPageState extends State<PerfilUsuarioPage> {
 
   Widget _buildListaAvaliacoes(ThemeData tema, Color corPrimaria) {
     if (_carregandoAvaliacoes) {
-      return const Padding(
-        padding: EdgeInsets.all(24),
-        child: Center(child: CircularProgressIndicator(color: Color(0xFF7C4DFF))),
-      );
+      return const SkeletonListaAvaliacoes(qtd: 3);
     }
     if (_erroAvaliacoes) {
       return Padding(
@@ -671,19 +689,10 @@ class _PerfilUsuarioPageState extends State<PerfilUsuarioPage> {
       );
     }
     if (_avaliacoes.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          children: [
-            Icon(Icons.post_add_rounded, size: 42, color: corPrimaria.withValues(alpha: 0.6)),
-            const SizedBox(height: 8),
-            Text(
-              '${_perfil?['nome']?.toString() ?? 'Este usuário'} ainda não publicou avaliações.',
-              textAlign: TextAlign.center,
-              style: tema.textTheme.bodyMedium?.copyWith(color: const Color(0xFF6B6B80)),
-            ),
-          ],
-        ),
+      return const EmptyState(
+        icone: Icons.rate_review_rounded,
+        titulo: "Ainda sem avaliações",
+        descricao: "As avaliações publicadas por este usuário aparecerão aqui.",
       );
     }
 
@@ -748,12 +757,20 @@ class _PerfilUsuarioPageState extends State<PerfilUsuarioPage> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SizedBox(
-                width: 62,
-                height: 92,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: _construirMiniCapa(livroCapa, livroTitulo, tema),
+              Hero(
+                tag: heroTagLivro({
+                  'id': item['livroId'],
+                  'titulo': item['livroTitulo'],
+                  'autor': item['livroAutor'],
+                }),
+                transitionOnUserGestures: true,
+                child: SizedBox(
+                  width: 62,
+                  height: 92,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: _construirMiniCapa(livroCapa, livroTitulo, tema),
+                  ),
                 ),
               ),
               const SizedBox(width: 10),

@@ -407,7 +407,7 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
   }
 
   Widget _botaoStatus(String status, IconData icone, String rotulo) {
-    final info = infoStatusLeitura(status);
+    final info = infoStatusLeitura(context, status);
     final selecionado = _statusLeitura == status;
     return Expanded(
       child: Material(

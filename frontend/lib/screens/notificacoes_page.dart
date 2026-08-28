@@ -4,6 +4,9 @@ import 'package:frontend/services/auth_service.dart';
 import 'package:frontend/screens/perfil_usuario_page.dart';
 import 'package:frontend/screens/detalhe_livro_page.dart';
 import 'package:frontend/utils/snackbars.dart';
+import 'package:frontend/utils/transitions.dart';
+import 'package:frontend/widgets/empty_state.dart';
+import 'package:frontend/widgets/skeletons.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 class NotificacoesPage extends StatefulWidget {
@@ -129,7 +132,7 @@ class _NotificacoesPageState extends State<NotificacoesPage> {
         'id': dadoId,
         'titulo': dadoNome,
       };
-      Navigator.push(context, MaterialPageRoute(builder: (_) => DetalheLivroPage(livro: livroTemp)));
+      navegarComAnimacao(context, DetalheLivroPage(livro: livroTemp is Map<String,dynamic> ? livroTemp : Map<String,dynamic>.from(livroTemp as Map)));
       return;
     }
     if (autorId != null) {
@@ -244,29 +247,44 @@ class _NotificacoesPageState extends State<NotificacoesPage> {
         color: corPrimaria,
         onRefresh: () => _carregarPagina(resetar: true),
         child: _carregando && _itens.isEmpty
-            ? const Center(child: CircularProgressIndicator())
+            ? ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: [
+                  ShimmerBase(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: List.generate(4, (_) => Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const BlocoSkeleton(largura: 44, altura: 44, raio: 99),
+                              const SizedBox(width: 12),
+                              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                const BlocoSkeleton(altura: 14, raio: 7),
+                                const SizedBox(height: 6),
+                                const BlocoSkeleton(largura: 220, altura: 12, raio: 6),
+                                const SizedBox(height: 4),
+                                const BlocoSkeleton(largura: 90, altura: 12, raio: 6),
+                              ])),
+                            ],
+                          ),
+                        )),
+                      ),
+                    ),
+                  ),
+                ],
+              )
             : _itens.isEmpty
                 ? ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
                     children: [
-                      SizedBox(height: MediaQuery.of(context).size.height * 0.28),
-                      Center(
-                        child: Column(
-                          children: [
-                            Container(
-                              width: 92, height: 92,
-                              decoration: BoxDecoration(color: corPrimaria.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(26)),
-                              child: const Icon(Icons.notifications_none_rounded, size: 42, color: Color(0xFF7C4DFF)),
-                            ),
-                            const SizedBox(height: 18),
-                            Text('Sem notificações por enquanto', style: tema.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
-                            const SizedBox(height: 8),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 36),
-                              child: Text('Quando alguém seguir você ou avaliar um livro seu, aparecerá aqui.', textAlign: TextAlign.center, style: tema.textTheme.bodyMedium?.copyWith(color: const Color(0xFF6B6B80))),
-                            ),
-                          ],
-                        ),
+                      EmptyState(
+                        icone: Icons.notifications_active_rounded,
+                        titulo: "Sem notificações por enquanto",
+                        descricao: "Quando alguém seguir você ou curtir sua avaliação, aparecerá por aqui.",
                       ),
                     ],
                   )

@@ -12,8 +12,11 @@ import 'package:frontend/widgets/estrelas_avaliacao.dart';
 import 'package:frontend/widgets/capa_livro.dart';
 import 'package:frontend/widgets/menu_configuracoes_bottomsheet.dart';
 import 'package:frontend/widgets/status_progresso_leitura.dart';
+import 'package:frontend/widgets/empty_state.dart';
 import 'package:frontend/utils/formatters.dart';
 import 'package:frontend/utils/snackbars.dart';
+import 'package:frontend/utils/transitions.dart';
+import 'package:frontend/widgets/skeletons.dart';
 
 enum OpcaoOrdenacao {
   tituloAZ,
@@ -1084,55 +1087,25 @@ class _ListaLivrosPageState extends State<ListaLivrosPage> {
         ],
       ),
       body: carregando
-          ? const Center(child: CircularProgressIndicator())
+          ? const SkeletonListaLivros()
           : livros.isEmpty
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          width: 96,
-                          height: 96,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(24),
-                            color: const Color(0xFFEDE7FF),
-                          ),
-                          child: const Icon(
-                            Icons.menu_book_rounded,
-                            size: 44,
-                            color: Color(0xFF7C4DFF),
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        Text(
-                          'Sua biblioteca está vazia.',
-                          style: Theme.of(context).textTheme.bodyLarge,
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 24),
-                        SizedBox(
-                          width: 220,
-                          child: ElevatedButton.icon(
-                            onPressed: () async {
-                              final resultado = await Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => const CadastroLivroPage(),
-                                ),
-                              );
-                              if (resultado == true) {
-                                buscarLivros();
-                              }
-                            },
-                            icon: const Icon(Icons.add),
-                            label: const Text('Adicionar livro'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+              ? EmptyState(
+                  icone: Icons.local_library_rounded,
+                  titulo: "Sua biblioteca está começando agora",
+                  descricao: "Adicione seu primeiro livro para acompanhar suas leituras, avaliações e progresso.",
+                  rotuloBotao: "Adicionar primeiro livro",
+                  iconeBotao: Icons.add_rounded,
+                  aoClicarBotao: () async {
+                    final resultado = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const CadastroLivroPage(),
+                      ),
+                    );
+                    if (resultado == true) {
+                      buscarLivros();
+                    }
+                  },
                 )
               : RefreshIndicator(
                   color: const Color(0xFF7C4DFF),
@@ -1349,16 +1322,99 @@ class _ListaLivrosPageState extends State<ListaLivrosPage> {
                                   ? statusTxt
                                   : (livro['lido'] == true ? 'LIDO' : 'QUERO_LER');
                               final ehLendo = statusDisplay == 'LENDO' && progressoInfo.totalPaginas != null;
+                              final tagHero = heroTagLivro(livro);
+                              Future<void> abrirDetalhe() async {
+                                final resultado = await navegarComAnimacao<dynamic>(
+                                  context,
+                                  DetalheLivroPage(livro: Map<String, dynamic>.from(livro)),
+                                );
+                                if (resultado == true) {
+                                  _buscaController.clear();
+                                  _debounceBusca?.cancel();
+                                  buscarLivros();
+                                } else if (resultado is Map &&
+                                    resultado['deletado'] == true &&
+                                    resultado['adiado'] == true &&
+                                    resultado['livro'] is Map) {
+                                  final livroDeletado = resultado['livro'] as Map;
+                                  final livroId = livroDeletado['id'];
+
+                                  final idxTodos = livros.indexWhere((l) =>
+                                      (l['id'] != null ? l['id'].toString() : '') ==
+                                      (livroId != null ? livroId.toString() : ''));
+                                  final snapshotTodos = List<dynamic>.from(livros);
+
+                                  if (idxTodos != -1) {
+                                    setState(() {
+                                      livros.removeAt(idxTodos);
+                                      final idxFiltradosAtual = _livrosFiltrados.indexWhere((l) =>
+                                          (l['id'] != null ? l['id'].toString() : '') ==
+                                          (livroId != null ? livroId.toString() : ''));
+                                      if (idxFiltradosAtual != -1) _livrosFiltrados.removeAt(idxFiltradosAtual);
+                                      final qtdExibir = _livrosPaginados.length.clamp(0, _livrosFiltrados.length);
+                                      _livrosPaginados = qtdExibir == 0
+                                          ? List<dynamic>.from(_livrosFiltrados)
+                                          : List<dynamic>.from(_livrosFiltrados.sublist(0, qtdExibir));
+                                      _temMaisParaCarregar = _livrosPaginados.length < _livrosFiltrados.length;
+                                    });
+                                  }
+
+                                  if (!mounted) return;
+                                  ScaffoldMessenger.of(context)
+                                    ..removeCurrentSnackBar()
+                                    ..showSnackBar(
+                                      SnackBar(
+                                        behavior: SnackBarBehavior.floating,
+                                        duration: const Duration(seconds: 4),
+                                        margin: const EdgeInsets.fromLTRB(14, 0, 14, 18),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                        backgroundColor: const Color(0xFF2B2B33),
+                                        content: Row(
+                                          children: [
+                                            const Icon(Icons.delete_outline_rounded, size: 20, color: Color(0xFFFFB3B3)),
+                                            const SizedBox(width: 10),
+                                            Expanded(
+                                              child: Text(
+                                                '"${(livroDeletado['titulo'] ?? 'Livro').toString().length > 32 ? '${(livroDeletado['titulo'] ?? 'Livro').toString().substring(0, 32)}...' : livroDeletado['titulo'] ?? 'Livro'}" removido da biblioteca',
+                                                style: const TextStyle(color: Colors.white, fontSize: 14),
+                                                maxLines: 2,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        action: SnackBarAction(
+                                          label: 'DESFAZER',
+                                          textColor: const Color(0xFFB28CFF),
+                                          onPressed: () {
+                                            if (idxTodos != -1 && mounted) {
+                                              setState(() {
+                                                livros = snapshotTodos;
+                                              });
+                                              _filtrarLivros(
+                                                _buscaController.text,
+                                                resetarPagina: true,
+                                              );
+                                            }
+                                          },
+                                        ),
+                                      ),
+                                    );
+                                }
+                              }
                               return Padding(
                                 padding: const EdgeInsets.only(bottom: 12),
                                 child: Card(
-                                  child: ListTile(
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                    leading: CapaLivro(livro: livro),
-                                    title: Text(
-                                      livro['titulo'] ?? '',
-                                      style: Theme.of(context).textTheme.titleLarge,
-                                    ),
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(14),
+                                    onTap: abrirDetalhe,
+                                    child: ListTile(
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                      leading: CapaLivro(livro: livro, heroTag: tagHero),
+                                      title: Text(
+                                        livro['titulo'] ?? '',
+                                        style: Theme.of(context).textTheme.titleLarge,
+                                      ),
                                     subtitle: Padding(
                                       padding: const EdgeInsets.only(top: 8),
                                       child: Column(
@@ -1453,90 +1509,11 @@ class _ListaLivrosPageState extends State<ListaLivrosPage> {
                                             ),
                                             child: const Icon(Icons.chevron_right_rounded, color: Color(0xFF7C4DFF)),
                                           ),
-                                    onTap: () async {
-                                      final resultado = await Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) => DetalheLivroPage(livro: livro),
-                                        ),
-                                      );
-                                      if (resultado == true) {
-                                        _buscaController.clear();
-                                        _debounceBusca?.cancel();
-                                        buscarLivros();
-                                      } else if (resultado is Map &&
-                                          resultado['deletado'] == true &&
-                                          resultado['adiado'] == true &&
-                                          resultado['livro'] is Map) {
-                                        final livroDeletado = resultado['livro'] as Map;
-                                        final livroId = livroDeletado['id'];
-
-                                        final idxTodos = livros.indexWhere((l) =>
-                                            (l['id'] != null ? l['id'].toString() : '') ==
-                                            (livroId != null ? livroId.toString() : ''));
-                                        final snapshotTodos = List<dynamic>.from(livros);
-
-                                        if (idxTodos != -1) {
-                                          setState(() {
-                                            livros.removeAt(idxTodos);
-                                            final idxFiltradosAtual = _livrosFiltrados.indexWhere((l) =>
-                                                (l['id'] != null ? l['id'].toString() : '') ==
-                                                (livroId != null ? livroId.toString() : ''));
-                                            if (idxFiltradosAtual != -1) _livrosFiltrados.removeAt(idxFiltradosAtual);
-                                            final qtdExibir = _livrosPaginados.length.clamp(0, _livrosFiltrados.length);
-                                            _livrosPaginados = qtdExibir == 0
-                                                ? List<dynamic>.from(_livrosFiltrados)
-                                                : List<dynamic>.from(_livrosFiltrados.sublist(0, qtdExibir));
-                                            _temMaisParaCarregar = _livrosPaginados.length < _livrosFiltrados.length;
-                                          });
-                                        }
-
-                                        if (!mounted) return;
-                                        ScaffoldMessenger.of(context)
-                                          ..removeCurrentSnackBar()
-                                          ..showSnackBar(
-                                            SnackBar(
-                                              behavior: SnackBarBehavior.floating,
-                                              duration: const Duration(seconds: 4),
-                                              margin: const EdgeInsets.fromLTRB(14, 0, 14, 18),
-                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                              backgroundColor: const Color(0xFF2B2B33),
-                                              content: Row(
-                                                children: [
-                                                  const Icon(Icons.delete_outline_rounded, size: 20, color: Color(0xFFFFB3B3)),
-                                                  const SizedBox(width: 10),
-                                                  Expanded(
-                                                    child: Text(
-                                                      '"${(livroDeletado['titulo'] ?? 'Livro').toString().length > 32 ? '${(livroDeletado['titulo'] ?? 'Livro').toString().substring(0, 32)}...' : livroDeletado['titulo'] ?? 'Livro'}" removido da biblioteca',
-                                                      style: const TextStyle(color: Colors.white, fontSize: 14),
-                                                      maxLines: 2,
-                                                      overflow: TextOverflow.ellipsis,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                              action: SnackBarAction(
-                                                label: 'DESFAZER',
-                                                textColor: const Color(0xFFB28CFF),
-                                                onPressed: () {
-                                                  if (idxTodos != -1 && mounted) {
-                                                    setState(() {
-                                                      livros = snapshotTodos;
-                                                    });
-                                                    _filtrarLivros(
-                                                      _buscaController.text,
-                                                      resetarPagina: true,
-                                                    );
-                                                  }
-                                                },
-                                              ),
-                                            ),
-                                          );
-                                      }
-                                    },
+                                    onTap: abrirDetalhe,
                                   ),
                                 ),
-                              );
+                              ),
+                            );
                             },
                             childCount: _livrosPaginados.length + (_carregandoMais || _temMaisParaCarregar ? 1 : 0),
                           ),

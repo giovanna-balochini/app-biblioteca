@@ -2,7 +2,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../services/auth_service.dart';
+import '../widgets/empty_state.dart';
 import '../utils/snackbars.dart';
+import '../utils/transitions.dart';
 import 'perfil_usuario_page.dart';
 import 'detalhe_livro_page.dart';
 
@@ -248,12 +250,17 @@ class _BuscaPageState extends State<BuscaPage> with SingleTickerProviderStateMix
 
   Widget _buildAbaPessoas() {
     if (_pessoas.isEmpty && !_carregandoPessoas) {
-      return _vazio(
-        icone: Icons.people_alt_outlined,
-        titulo: _query.isEmpty ? 'Digite para encontrar pessoas' : 'Nenhuma pessoa encontrada',
-        subtitulo: _query.isEmpty
-            ? 'Tente procurar por nome ou e-mail'
-            : 'Tente outra palavra-chave',
+      if (_query.isEmpty) {
+        return const EmptyState(
+          icone: Icons.search_rounded,
+          titulo: "Digite para buscar livros, autores ou pessoas",
+          descricao: "Comece digitando algo na barra de busca acima.",
+        );
+      }
+      return const EmptyState(
+        icone: Icons.search_off_rounded,
+        titulo: "Nada encontrado por aqui",
+        descricao: "Tente palavras diferentes ou navegue pelo feed para descobrir novos livros.",
       );
     }
     return RefreshIndicator(
@@ -284,12 +291,17 @@ class _BuscaPageState extends State<BuscaPage> with SingleTickerProviderStateMix
 
   Widget _buildAbaLivros() {
     if (_livros.isEmpty && !_carregandoLivros) {
-      return _vazio(
-        icone: Icons.menu_book_outlined,
-        titulo: _query.isEmpty ? 'Descubra livros da comunidade' : 'Nenhum livro encontrado',
-        subtitulo: _query.isEmpty
-            ? 'Procure por título, autor ou gênero'
-            : 'Tente outra palavra-chave',
+      if (_query.isEmpty) {
+        return const EmptyState(
+          icone: Icons.search_rounded,
+          titulo: "Digite para buscar livros, autores ou pessoas",
+          descricao: "Comece digitando algo na barra de busca acima.",
+        );
+      }
+      return const EmptyState(
+        icone: Icons.search_off_rounded,
+        titulo: "Nada encontrado por aqui",
+        descricao: "Tente palavras diferentes ou navegue pelo feed para descobrir novos livros.",
       );
     }
     return RefreshIndicator(
@@ -307,17 +319,16 @@ class _BuscaPageState extends State<BuscaPage> with SingleTickerProviderStateMix
             key: ValueKey('l-${_livros[i]['id']}'),
             livro: _livros[i],
             aoAbrir: () {
-              Navigator.push(
+              final livroParam = <String, dynamic>{
+                'id': _livros[i]['id'],
+                'titulo': _livros[i]['titulo'],
+                'autor': _livros[i]['autor'],
+                'imagem': _livros[i]['imagem'],
+              };
+              navegarComAnimacao(
                 context,
-                MaterialPageRoute(
-                  builder: (_) => DetalheLivroPage(
-                    livro: <String, dynamic>{
-                      'id': _livros[i]['id'],
-                      'titulo': _livros[i]['titulo'],
-                      'autor': _livros[i]['autor'],
-                      'imagem': _livros[i]['imagem'],
-                    },
-                  ),
+                DetalheLivroPage(
+                  livro: livroParam is Map<String, dynamic> ? livroParam : Map<String, dynamic>.from(livroParam as Map),
                 ),
               );
             },

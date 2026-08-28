@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:frontend/utils/app_theme.dart';
 
 class BarraProgressoCircular extends StatelessWidget {
   final double percentual;
@@ -23,7 +24,8 @@ class BarraProgressoCircular extends StatelessWidget {
     final tema = Theme.of(context);
     final escuro = tema.brightness == Brightness.dark;
     final double p = (percentual < 0 ? 0 : (percentual > 100 ? 100 : percentual)) / 100;
-    final corP = corPrimaria ?? const Color(0xFF7C4DFF);
+    final cores = context.coresApp;
+    final corP = corPrimaria ?? cores.roxoPrimario;
     final corF = corFundo ?? (escuro ? const Color(0xFF2A2A37) : const Color(0xFFE7E7F1));
 
     return SizedBox(
@@ -52,19 +54,16 @@ class BarraProgressoCircular extends StatelessWidget {
   }
 }
 
-const Color _corQueroLer = Color(0xFF9090B0);
-const Color _corLendo = Color(0xFF7C4DFF);
-const Color _corLido = Color(0xFF2E7D32);
-
-({Color cor, String rotulo, IconData icone}) infoStatusLeitura(String? status) {
+({Color cor, String rotulo, IconData icone}) infoStatusLeitura(BuildContext? context, String? status) {
+  final cores = context != null ? context.coresApp : AppCores.claro;
   switch (status?.toUpperCase()) {
     case 'LENDO':
-      return (cor: _corLendo, rotulo: 'Lendo', icone: Icons.menu_book_rounded);
+      return (cor: cores.lendoRoxo, rotulo: 'Lendo', icone: Icons.menu_book_rounded);
     case 'LIDO':
-      return (cor: _corLido, rotulo: 'Lido', icone: Icons.check_circle_rounded);
+      return (cor: cores.verdeLido, rotulo: 'Lido', icone: Icons.check_circle_rounded);
     case 'QUERO_LER':
     default:
-      return (cor: _corQueroLer, rotulo: 'Quero ler', icone: Icons.bookmark_border_rounded);
+      return (cor: cores.cinzaStatus, rotulo: 'Quero ler', icone: Icons.bookmark_border_rounded);
   }
 }
 
@@ -75,7 +74,7 @@ class ChipStatusLeitura extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final info = infoStatusLeitura(status);
+    final info = infoStatusLeitura(context, status);
     return Container(
       padding: EdgeInsets.symmetric(
         horizontal: compacto ? 8 : 10,

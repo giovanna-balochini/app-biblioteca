@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:frontend/utils/app_theme.dart';
 
 class ThemeService with ChangeNotifier {
   static const String _chaveTema = 'tema_escuro_ativo';
@@ -38,6 +39,9 @@ class ThemeService with ChangeNotifier {
         seedColor: sementeRoxa,
         brightness: Brightness.light,
       ),
+      extensions: <ThemeExtension<dynamic>>[
+        AppCores.claro,
+      ],
       appBarTheme: const AppBarTheme(
         centerTitle: false,
         elevation: 0,
@@ -137,6 +141,9 @@ class ThemeService with ChangeNotifier {
         seedColor: sementeRoxa,
         brightness: Brightness.dark,
       ),
+      extensions: <ThemeExtension<dynamic>>[
+        AppCores.escuro,
+      ],
       appBarTheme: const AppBarTheme(
         centerTitle: false,
         elevation: 0,

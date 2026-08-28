@@ -3,29 +3,51 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:math' as math;
+import 'package:frontend/utils/app_theme.dart';
 
 class CapaLivro extends StatelessWidget {
   final dynamic livro;
+  final String? heroTag;
+  final double? largura;
+  final double? altura;
+  final double? borderRadius;
+  final bool mostrarFitaLido;
 
-  const CapaLivro({super.key, required this.livro});
+  const CapaLivro({
+    super.key,
+    required this.livro,
+    this.heroTag,
+    this.largura,
+    this.altura,
+    this.borderRadius,
+    this.mostrarFitaLido = true,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final w = largura ?? 56.0;
+    final h = altura ?? 82.0;
+    final raio = borderRadius ?? 10.0;
     final imagem = livro['imagem'];
     final lido = livro['lido'] == true;
+    final usarFita = mostrarFitaLido && lido;
+    final cores = context.coresApp;
+    final roxoIcone = cores.roxoPrimario;
+    final fundoSemCapa = cores.roxoFundoChip;
+    final corFita = cores.verdeLido;
 
     Widget capaSemImagem() => Container(
-          width: 56,
-          height: 82,
+          width: w,
+          height: h,
           decoration: BoxDecoration(
-            color: const Color(0xFFF1EEFF),
-            borderRadius: BorderRadius.circular(10),
+            color: fundoSemCapa,
+            borderRadius: BorderRadius.circular(raio),
           ),
           alignment: Alignment.center,
-          child: const Icon(
+          child: Icon(
             Icons.menu_book_rounded,
-            size: 28,
-            color: Color(0xFF7C4DFF),
+            size: w <= 60 ? 28 : (w * 0.48).clamp(26, 90),
+            color: roxoIcone,
           ),
         );
 
@@ -43,11 +65,11 @@ class CapaLivro extends StatelessWidget {
             bytes = base64Decode(imagemStr);
           }
           return ClipRRect(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(raio),
             child: Image.memory(
               bytes,
-              width: 56,
-              height: 82,
+              width: w,
+              height: h,
               fit: BoxFit.cover,
               errorBuilder: (_, _, _) => capaSemImagem(),
             ),
@@ -57,16 +79,16 @@ class CapaLivro extends StatelessWidget {
         }
       }
       return ClipRRect(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(raio),
         child: CachedNetworkImage(
           imageUrl: imagemStr,
-          width: 56,
-          height: 82,
+          width: w,
+          height: h,
           fit: BoxFit.cover,
-          placeholder: (context, url) => const SizedBox(
-            width: 56,
-            height: 82,
-            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+          placeholder: (context, url) => SizedBox(
+            width: w,
+            height: h,
+            child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
           ),
           errorWidget: (context, url, error) => capaSemImagem(),
         ),
@@ -77,46 +99,75 @@ class CapaLivro extends StatelessWidget {
         ? capaSemImagem()
         : capaComImagem();
 
-    if (!lido) return filhoCapa;
-
-    return SizedBox(
-      width: 56,
-      height: 82,
-      child: Stack(
-        clipBehavior: Clip.hardEdge,
-        children: [
-          filhoCapa,
-          Positioned(
-            top: -3,
-            left: -18,
-            child: Transform.rotate(
-              angle: -math.pi / 4,
-              child: Container(
-                width: 72,
-                height: 18,
-                color: const Color(0xFF2E7D32),
-              ),
-            ),
-          ),
-          Positioned(
-            top: 5,
-            left: 0,
-            child: Transform.rotate(
-              angle: -math.pi / 4,
-              child: const Text(
-                'LIDO',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 10,
-                  fontStyle: FontStyle.italic,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1.3,
+    Widget camadaFita(Widget child) {
+      if (!usarFita) return child;
+      final tamanhoFita = (w * 1.28).clamp(60.0, 240.0);
+      final tamTexto = (w * 0.17).clamp(9.0, 16.0);
+      return SizedBox(
+        width: w,
+        height: h,
+        child: Stack(
+          clipBehavior: Clip.hardEdge,
+          children: [
+            child,
+            Positioned(
+              top: -(tamanhoFita * 0.04),
+              left: -(tamanhoFita * 0.25),
+              child: Transform.rotate(
+                angle: -math.pi / 4,
+                child: Container(
+                  width: tamanhoFita,
+                  height: (h * 0.21).clamp(15.0, 40.0),
+                  color: corFita,
                 ),
               ),
             ),
-          ),
-        ],
-      ),
-    );
+            Positioned(
+              top: (h * 0.05).clamp(3, 14),
+              left: 0,
+              child: Transform.rotate(
+                angle: -math.pi / 4,
+                child: Text(
+                  'LIDO',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: tamTexto,
+                    fontStyle: FontStyle.italic,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.3,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final filho = camadaFita(filhoCapa);
+
+    if (heroTag != null && heroTag!.isNotEmpty) {
+      return Hero(
+        tag: heroTag!,
+        transitionOnUserGestures: true,
+        flightShuttleBuilder: (flightContext, animation, flightDirection, fromHeroContext, toHeroContext) {
+          final Widget toHero = toHeroContext.widget;
+          return RotationTransition(
+            turns: Tween<double>(begin: flightDirection == HeroFlightDirection.pop ? -0.02 : 0.02, end: 0)
+                .animate(CurvedAnimation(parent: animation, curve: Curves.easeOut)),
+            child: FadeTransition(
+              opacity: animation.drive(Tween<double>(begin: 0.7, end: 1.0)),
+              child: toHero,
+            ),
+          );
+        },
+        child: Material(
+          color: Colors.transparent,
+          child: filho,
+        ),
+      );
+    }
+
+    return filho;
   }
 }

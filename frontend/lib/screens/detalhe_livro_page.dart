@@ -11,8 +11,10 @@ import 'package:frontend/widgets/estrelas_avaliacao.dart';
 import 'package:frontend/widgets/info_tile.dart';
 import 'package:frontend/widgets/botao_curtida_avaliacao.dart';
 import 'package:frontend/widgets/status_progresso_leitura.dart';
+import 'package:frontend/widgets/capa_livro.dart';
 import 'package:frontend/utils/formatters.dart';
 import 'package:frontend/utils/snackbars.dart';
+import 'package:frontend/utils/transitions.dart';
 import 'package:frontend/screens/perfil_usuario_page.dart';
 
 class DetalheLivroPage extends StatefulWidget {
@@ -161,7 +163,7 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
   }
 
   Widget _botaoStatus(String status, IconData icone, String rotulo) {
-    final info = infoStatusLeitura(status);
+    final info = infoStatusLeitura(context, status);
     final selecionado = _statusLeitura == status;
     return Expanded(
       child: Material(
@@ -1025,109 +1027,78 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
                 child: Column(
                   children: [
                     if (!_editando) ...[
-                      if (widget.livro['imagem'] != null &&
-                          widget.livro['imagem'].toString().isNotEmpty)
-                        () {
-                          final imagemStr = widget.livro['imagem'].toString();
-                          final ehBase64 = imagemStr.startsWith('data:image') || imagemStr.length > 1000;
-                          Widget capaOk;
-                          if (ehBase64) {
-                            try {
-                              Uint8List bytes;
-                              if (imagemStr.startsWith('data:image')) {
-                                final commaIdx = imagemStr.indexOf(',');
-                                final b64 = commaIdx != -1 ? imagemStr.substring(commaIdx + 1) : imagemStr;
-                                bytes = base64Decode(b64);
-                              } else {
-                                bytes = base64Decode(imagemStr);
-                              }
-                              capaOk = ClipRRect(
-                                borderRadius: BorderRadius.circular(16),
-                                child: Image.memory(
-                                  bytes,
-                                  height: alturaCapa,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, _, _) => Container(
-                                    height: alturaCapa,
-                                    width: larguraCapa,
-                                    color: const Color(0xFFF1EEFF),
-                                    alignment: Alignment.center,
-                                    child: const Icon(Icons.broken_image, size: 40),
-                                  ),
-                                ),
-                              );
-                            } catch (_) {
-                              capaOk = Container(
-                                height: alturaCapa,
-                                width: larguraCapa,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFF1EEFF),
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(Icons.menu_book_rounded, size: telaPequena ? 42 : 52, color: Color(0xFF7C4DFF)),
-                                    SizedBox(height: telaPequena ? 8 : 12),
-                                    Text(
-                                      'Sem capa',
-                                      style: TextStyle(fontSize: telaPequena ? 14 : 16, fontWeight: FontWeight.w600, color: Color(0xFF5F5F7A)),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }
-                          } else {
-                            capaOk = ClipRRect(
-                              borderRadius: BorderRadius.circular(16),
-                              child: CachedNetworkImage(
-                                imageUrl: imagemStr,
-                                height: alturaCapa,
-                                fit: BoxFit.cover,
-                                placeholder: (context, url) => SizedBox(
-                                  height: alturaCapa,
-                                  child: const Center(child: CircularProgressIndicator()),
-                                ),
-                                errorWidget: (context, url, error) => Container(
-                                  height: alturaCapa,
-                                  width: larguraCapa,
-                                  color: Colors.grey.shade300,
-                                  alignment: Alignment.center,
-                                  child: const Icon(Icons.broken_image, size: 40),
-                                ),
-                              ),
-                            );
-                          }
-                          return capaOk;
-                        }()
-                      else
-                        Container(
-                          height: alturaCapa,
-                          width: larguraCapa,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF1EEFF),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.menu_book_rounded,
-                                size: telaPequena ? 42 : 52,
-                                color: Color(0xFF7C4DFF),
-                              ),
-                              SizedBox(height: telaPequena ? 8 : 12),
-                              Text(
-                                'Sem capa',
-                                style: TextStyle(
-                                  fontSize: telaPequena ? 14 : 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF5F5F7A),
-                                ),
-                              ),
-                            ],
-                          ),
+                      CapaLivro(
+                        livro: widget.livro,
+                        heroTag: heroTagLivro(widget.livro),
+                        largura: larguraCapa,
+                        altura: alturaCapa,
+                        borderRadius: 16,
+                      ),
+                      espacamentoInterno,
+                      Text(
+                        widget.livro['titulo'] ?? 'Sem Título',
+                        style: TextStyle(
+                          fontFamily: 'Diphylleia',
+                          fontSize: telaPequena ? 24 : 30,
+                          fontWeight: FontWeight.normal,
                         ),
+                        textAlign: TextAlign.center,
+                      ),
+                      SizedBox(height: telaPequena ? 6 : 10),
+                      Text(
+                        widget.livro['autor'] ?? 'Autor Desconhecido',
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              fontWeight: FontWeight.w600,
+                            ),
+                        textAlign: TextAlign.center,
+                      ),
+                      SizedBox(height: telaPequena ? 8 : 14),
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        spacing: 10,
+                        runSpacing: 10,
+                        children: [
+                          if (widget.livro['editora']?.toString().isNotEmpty == true)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.business_center_rounded, size: 15, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    widget.livro['editora']!.toString(),
+                                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          if (widget.livro['genero']?.toString().isNotEmpty == true)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF3EEFF),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.category_rounded, size: 15, color: Color(0xFF7C4DFF)),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    widget.livro['genero']!.toString(),
+                                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF7C4DFF)),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
                     ] else ...[
                       if (_tipoCapa == 'bytes' && _capaBytes != null)
                         ClipRRect(
@@ -1389,7 +1360,7 @@ class _DetalheLivroPageState extends State<DetalheLivroPage> {
                       Builder(
                         builder: (_) {
                           final info = InfoProgressoLivro.fromMap(widget.livro);
-                          final info2 = infoStatusLeitura(_statusLeitura);
+                          final info2 = infoStatusLeitura(context, _statusLeitura);
                           final temPaginas = info.totalPaginas != null;
                           final dtInicio = parseDataISO(widget.livro['dataInicioLeitura']?.toString());
                           final dtFim = parseDataISO(widget.livro['dataConclusao']?.toString())
