@@ -8,11 +8,13 @@ import 'package:frontend/services/auth_service.dart';
 import 'package:frontend/services/google_books_service.dart';
 import 'package:frontend/widgets/estrelas_avaliacao.dart';
 import 'package:frontend/widgets/status_progresso_leitura.dart';
+import 'package:frontend/utils/app_theme.dart';
 import 'package:frontend/utils/formatters.dart';
 import 'package:frontend/utils/snackbars.dart';
 
 class CadastroLivroPage extends StatefulWidget {
-  const CadastroLivroPage({super.key});
+  final Map<String, dynamic>? livroInicial;
+  const CadastroLivroPage({super.key, this.livroInicial});
 
   @override
   State<CadastroLivroPage> createState() => _CadastroLivroPageState();
@@ -41,6 +43,33 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
   Uint8List? _capaBytes;
   String? _tipoCapa;
   final ImagePicker _imagePicker = ImagePicker();
+
+  @override
+  void initState() {
+    super.initState();
+    final inicial = widget.livroInicial;
+    if (inicial != null) {
+      _tituloController.text = inicial['titulo']?.toString() ?? '';
+      _autorController.text = inicial['autor']?.toString() ?? '';
+      _editoraController.text = inicial['editora']?.toString() ?? '';
+      _generoController.text = inicial['genero']?.toString() ?? '';
+      _descricaoController.text = inicial['descricao']?.toString() ?? '';
+      final img = inicial['imagem'];
+      if (img != null && img.toString().isNotEmpty) {
+        _capaUrl = img.toString();
+        _tipoCapa = 'url';
+        _tituloDaCapa = inicial['titulo']?.toString();
+      }
+      final totalPags = inicial['totalPaginas'];
+      if (totalPags != null) {
+        _totalPaginasController.text = totalPags.toString();
+      }
+      final pagAtual = inicial['paginaAtual'];
+      if (pagAtual != null) {
+        _paginaAtualController.text = pagAtual.toString();
+      }
+    }
+  }
 
   bool _formularioFoiAlterado() {
     return _tituloController.text.trim().isNotEmpty ||
@@ -151,7 +180,7 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
       }
     } catch (e) {
       if (!mounted) return;
-      mostrarSnackbarErro(context, 'Nao foi possivel selecionar a imagem.');
+      mostrarSnackbarErro(context, 'Não foi possível selecionar a imagem.');
     }
   }
 
@@ -174,7 +203,7 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
       }
     } catch (e) {
       if (!mounted) return;
-      mostrarSnackbarErro(context, 'Nao foi possivel tirar a foto.');
+      mostrarSnackbarErro(context, 'Não foi possível tirar a foto.');
     }
   }
 
@@ -364,14 +393,14 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
         setState(() => _salvando = false);
         final mensagem = _mensagemErro(
           response,
-          'Nao foi possivel salvar o livro.',
+          'Nao foi possível salvar o livro.',
         );
         mostrarSnackbarErro(context, 'Erro ao salvar o livro: $mensagem');
       }
     } catch (e) {
       if (!mounted) return;
       setState(() => _salvando = false);
-      mostrarSnackbarErro(context, 'Falha na requisicao. Tente novamente.');
+      mostrarSnackbarErro(context, 'Falha na requisção. Tente novamente.');
     }
   }
 
@@ -463,6 +492,101 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
                 ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _botaoStatusNovo({
+    required String status,
+    required IconData icone,
+    required String rotulo,
+    required double largura,
+    required ({Color fundo, Color fundoClaro, Color texto, Color iconeCor}) cores,
+  }) {
+    final selecionado = _statusLeitura == status;
+    return SizedBox(
+      width: largura,
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            _statusLeitura = status;
+            _lido = status == 'LIDO';
+          });
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 240),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            gradient: selecionado
+                ? LinearGradient(
+                    colors: [cores.fundo, cores.fundoClaro],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  )
+                : null,
+            color: selecionado ? null : Theme.of(context).cardColor.withValues(alpha: 0.95),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: selecionado
+                  ? cores.fundo.withValues(alpha: 0.32)
+                  : context.coresApp.separador,
+              width: selecionado ? 0.8 : 0.7,
+            ),
+            boxShadow: selecionado
+                ? [
+                    BoxShadow(
+                      color: cores.fundo.withValues(alpha: 0.35),
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
+                      spreadRadius: -2,
+                    ),
+                    BoxShadow(
+                      color: cores.fundo.withValues(alpha: 0.18),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.03),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
+                      spreadRadius: -2,
+                    ),
+                  ],
+          ),
+          child: Column(
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                width: 32, height: 32,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: selecionado ? Colors.white.withValues(alpha: 0.18) : cores.fundo.withValues(alpha: 0.09),
+                ),
+                child: Icon(
+                  icone,
+                  size: 17,
+                  color: selecionado ? Colors.white : cores.fundo,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                rotulo,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 12.5,
+                      letterSpacing: 0.1,
+                      color: selecionado ? Colors.white : context.coresApp.textoForte,
+                    ),
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
           ),
         ),
       ),
@@ -771,7 +895,7 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
                                           ),
                                     const SizedBox(height: 2),
                                     Text(
-                                      'Clique para alternar.',
+                                      'Clique para marcar como lido.',
                                       style: Theme.of(context).textTheme.bodyMedium,
                                     ),
                                   ],
@@ -810,141 +934,328 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
                       ],
                       Container(
                         width: double.infinity,
-                        padding: const EdgeInsets.fromLTRB(14, 12, 14, 16),
+                        padding: const EdgeInsets.fromLTRB(16, 18, 16, 20),
                         decoration: BoxDecoration(
-                          color: Theme.of(context).brightness == Brightness.dark
-                              ? const Color(0xFF1C1C27)
-                              : const Color(0xFFF3F0FF),
-                          borderRadius: BorderRadius.circular(14),
+                          color: context.coresApp.roxoFundoChip.withValues(alpha:
+                            Theme.of(context).brightness == Brightness.dark ? 0.30 : 0.65),
+                          borderRadius: BorderRadius.circular(26),
                           border: Border.all(
-                            color: Theme.of(context).brightness == Brightness.dark
-                                ? const Color(0xFF2B2B38)
-                                : const Color(0xFFE0D6FF),
+                            color: context.coresApp.roxoPrimario.withValues(alpha: 0.18),
                             width: 1,
                           ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: context.coresApp.roxoPrimario.withValues(alpha: 0.07),
+                              blurRadius: 22,
+                              offset: const Offset(0, 10),
+                              spreadRadius: -2,
+                            ),
+                          ],
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
                               children: [
-                                const Icon(Icons.bar_chart_rounded,
-                                    color: Color(0xFF7C4DFF), size: 24),
+                                Container(
+                                  width: 44, height: 44,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    gradient: LinearGradient(
+                                      colors: [context.coresApp.roxoPrimario, context.coresApp.roxoClaro],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: context.coresApp.roxoPrimario.withValues(alpha: 0.3),
+                                        blurRadius: 12,
+                                        offset: const Offset(0, 4),
+                                      ),
+                                    ],
+                                  ),
+                                  child: const Icon(Icons.auto_graph_rounded, color: Colors.white, size: 22),
+                                ),
                                 const SizedBox(width: 12),
                                 Expanded(
-                                  child: Text(
-                                    'Progresso da leitura (opcional)',
-                                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                          fontWeight: FontWeight.w800,
-                                          fontSize: 16,
-                                        ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Progresso da leitura',
+                                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                              fontWeight: FontWeight.w900,
+                                              color: context.coresApp.textoForte,
+                                              letterSpacing: -0.2,
+                                            ),
+                                      ),
+                                      Text(
+                                        'Registre sua jornada com este livro',
+                                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                              color: context.coresApp.textoMedio,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                                 ChipStatusLeitura(status: _statusLeitura),
                               ],
                             ),
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                _botaoStatus('QUERO_LER', Icons.bookmark_border_rounded, 'Quero ler'),
-                                const SizedBox(width: 8),
-                                _botaoStatus('LENDO', Icons.menu_book_rounded, 'Lendo'),
-                                const SizedBox(width: 8),
-                                _botaoStatus('LIDO', Icons.check_circle_rounded, 'Lido'),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: TextFormField(
-                                    controller: _totalPaginasController,
-                                    keyboardType: TextInputType.number,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Total de páginas',
-                                      prefixIcon: Icon(Icons.menu_book_rounded, color: Color(0xFF7C4DFF)),
-                                      hintText: 'Ex: 280',
+                            const SizedBox(height: 18),
+                            LayoutBuilder(
+                              builder: (_, constraints) {
+                                final larguraBotao = (constraints.maxWidth - 16) / 3;
+                                return Row(
+                                  children: [
+                                    _botaoStatusNovo(
+                                      status: 'QUERO_LER',
+                                      icone: Icons.bookmark_border_rounded,
+                                      rotulo: 'Quero ler',
+                                      largura: larguraBotao,
+                                      cores: (
+                                        fundo: const Color(0xFF6B7280),
+                                        fundoClaro: const Color(0xFF9CA3AF),
+                                        texto: Colors.white,
+                                        iconeCor: Colors.white,
+                                      ),
                                     ),
-                                    onChanged: (v) => setState(() {}),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: TextFormField(
-                                    controller: _paginaAtualController,
-                                    keyboardType: TextInputType.number,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Página atual',
-                                      prefixIcon: Icon(Icons.label_important_rounded, color: Color(0xFF7C4DFF)),
-                                      hintText: 'Ex: 47',
+                                    const SizedBox(width: 8),
+                                    _botaoStatusNovo(
+                                      status: 'LENDO',
+                                      icone: Icons.menu_book_rounded,
+                                      rotulo: 'Lendo',
+                                      largura: larguraBotao,
+                                      cores: (
+                                        fundo: context.coresApp.roxoPrimario,
+                                        fundoClaro: context.coresApp.roxoClaro,
+                                        texto: Colors.white,
+                                        iconeCor: Colors.white,
+                                      ),
                                     ),
-                                    onChanged: (v) => setState(() {}),
-                                  ),
-                                ),
-                              ],
+                                    const SizedBox(width: 8),
+                                    _botaoStatusNovo(
+                                      status: 'LIDO',
+                                      icone: Icons.verified_rounded,
+                                      rotulo: 'Lido',
+                                      largura: larguraBotao,
+                                      cores: (
+                                        fundo: context.coresApp.verdeLido,
+                                        fundoClaro: const Color(0xFF66BB6A),
+                                        texto: Colors.white,
+                                        iconeCor: Colors.white,
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              },
                             ),
-                            if (_statusLeitura == 'LENDO' || _statusLeitura == 'LIDO') ...[
-                              const SizedBox(height: 12),
-                              TextFormField(
-                                readOnly: true,
-                                controller: TextEditingController(text: formatarData(_dataInicio)),
-                                onTap: _selecionarDataInicio,
-                                decoration: InputDecoration(
-                                  labelText: 'Data de início',
-                                  prefixIcon: const Icon(Icons.event_available_rounded,
-                                      color: Color(0xFF7C4DFF)),
-                                  suffixIcon: _dataInicio != null
-                                      ? IconButton(
-                                          icon: const Icon(Icons.close, color: Color(0xFF7C4DFF)),
-                                          onPressed: () => setState(() => _dataInicio = null),
-                                          tooltip: 'Limpar data',
-                                        )
-                                      : null,
-                                  hintText: 'Quando você começou?',
+                            if (_statusLeitura == 'QUERO_LER') ...[
+                              const SizedBox(height: 18),
+                              Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).cardColor.withValues(alpha: 0.75),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(color: context.coresApp.separador, width: 0.8),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 46, height: 46,
+                                      decoration: BoxDecoration(
+                                        color: context.coresApp.roxoPrimario.withValues(alpha: 0.12),
+                                        borderRadius: BorderRadius.circular(14),
+                                      ),
+                                      child: Icon(Icons.auto_stories_rounded, color: context.coresApp.roxoPrimario, size: 24),
+                                    ),
+                                    const SizedBox(width: 14),
+                                    Expanded(
+                                      child: Text(
+                                        'Comece a ler para ativar o controle de progresso, páginas e datas. Volte aqui quando abrir a primeira página! 📚',
+                                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                              color: context.coresApp.textoMedio,
+                                              height: 1.4,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                              if (_statusLeitura == 'LIDO')
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 12),
-                                  child: TextFormField(
-                                    readOnly: true,
-                                    controller: TextEditingController(text: formatarData(_dataConclusao)),
-                                    onTap: _selecionarData,
-                                    decoration: InputDecoration(
-                                      labelText: 'Data de conclusão',
-                                      prefixIcon: const Icon(Icons.celebration_rounded,
-                                          color: Color(0xFF2E7D32)),
-                                      suffixIcon: _dataConclusao != null
-                                          ? IconButton(
-                                              icon: const Icon(Icons.close, color: Color(0xFF7C4DFF)),
-                                              onPressed: () => setState(() => _dataConclusao = null),
-                                              tooltip: 'Limpar data',
-                                            )
-                                          : null,
-                                      hintText: 'Quando terminou de ler?',
+                            ] else ...[
+                              const SizedBox(height: 18),
+                              Container(
+                                padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).cardColor.withValues(alpha: 0.85),
+                                  borderRadius: BorderRadius.circular(22),
+                                  border: Border.all(color: context.coresApp.separador, width: 0.8),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.04),
+                                      blurRadius: 16,
+                                      offset: const Offset(0, 6),
+                                      spreadRadius: -2,
                                     ),
-                                  ),
+                                  ],
                                 ),
-                            ],
-                            if (_statusLeitura == 'LENDO' &&
-                                int.tryParse(_totalPaginasController.text) != null &&
-                                int.tryParse(_totalPaginasController.text)! > 0) ...[
-                              const SizedBox(height: 14),
-                              Builder(
-                                builder: (_) {
-                                  final tot = int.tryParse(_totalPaginasController.text)!;
-                                  final at = int.tryParse(_paginaAtualController.text) ?? 0;
-                                  final p = ((at.clamp(0, tot) * 100) / tot).clamp(0, 100);
-                                  return ClipRRect(
-                                    borderRadius: BorderRadius.circular(999),
-                                    child: LinearProgressIndicator(
-                                      value: p / 100,
-                                      minHeight: 6,
-                                      backgroundColor: const Color(0xFF7C4DFF).withValues(alpha: 0.15),
-                                      valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF7C4DFF)),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Builder(
+                                      builder: (_) {
+                                        final tot = int.tryParse(_totalPaginasController.text.trim());
+                                        final at = int.tryParse(_paginaAtualController.text.trim()) ?? 0;
+                                        final temTotal = tot != null && tot > 0;
+                                        double? pct;
+                                        if (temTotal) {
+                                          pct = ((at.clamp(0, tot!) * 100) / tot).clamp(0, 100);
+                                        } else if (_statusLeitura == 'LIDO') {
+                                          pct = 100;
+                                        }
+                                        final corBarra = _statusLeitura == 'LIDO'
+                                            ? context.coresApp.verdeLido
+                                            : context.coresApp.roxoPrimario;
+                                        return Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                Text(
+                                                  temTotal && _statusLeitura == 'LENDO'
+                                                      ? 'Página ${at.clamp(0, tot!)} de $tot'
+                                                      : _statusLeitura == 'LIDO'
+                                                          ? (temTotal ? '$tot páginas — concluído' : 'Leitura concluída')
+                                                          : 'Acompanhe seu progresso',
+                                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                                        color: context.coresApp.textoForte,
+                                                        fontWeight: FontWeight.w800,
+                                                      ),
+                                                ),
+                                                const Spacer(),
+                                                if (pct != null)
+                                                  Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                                    decoration: BoxDecoration(
+                                                      color: corBarra.withValues(alpha: 0.12),
+                                                      borderRadius: BorderRadius.circular(999),
+                                                    ),
+                                                    child: Text(
+                                                      '${pct.round()}%',
+                                                      style: TextStyle(
+                                                        color: corBarra,
+                                                        fontSize: 12,
+                                                        fontWeight: FontWeight.w900,
+                                                        letterSpacing: 0.2,
+                                                      ),
+                                                    ),
+                                                  ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 10),
+                                            Stack(
+                                              children: [
+                                                ClipRRect(
+                                                  borderRadius: BorderRadius.circular(999),
+                                                  child: LinearProgressIndicator(
+                                                    value: (pct ?? 0) / 100,
+                                                    minHeight: 14,
+                                                    backgroundColor: corBarra.withValues(alpha: 0.12),
+                                                    valueColor: AlwaysStoppedAnimation<Color>(corBarra),
+                                                  ),
+                                                ),
+                                                if (pct != null && pct >= 15)
+                                                  Positioned.fill(
+                                                    child: Align(
+                                                      alignment: Alignment.centerLeft,
+                                                      child: Padding(
+                                                        padding: EdgeInsets.only(
+                                                          left: MediaQuery.of(context).size.width *
+                                                              0.01 + ((pct.clamp(15, 92) / 100) * 260).clamp(10, 260) * 0,
+                                                        ),
+                                                        child: SizedBox.shrink(),
+                                                      ),
+                                                    ),
+                                                  ),
+                                              ],
+                                            ),
+                                          ],
+                                        );
+                                      },
                                     ),
-                                  );
-                                },
+                                    const SizedBox(height: 16),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: _CampoNumerico(
+                                            controller: _totalPaginasController,
+                                            onChanged: (v) => setState(() {}),
+                                            icone: Icons.book_rounded,
+                                            label: 'Total de páginas',
+                                            hint: '280',
+                                            iconeCor: context.coresApp.roxoPrimario,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        if (_statusLeitura != 'LIDO')
+                                          Expanded(
+                                            child: _CampoNumerico(
+                                              controller: _paginaAtualController,
+                                              onChanged: (v) => setState(() {}),
+                                              icone: Icons.label_important_rounded,
+                                              label: 'Página atual',
+                                              hint: '47',
+                                              iconeCor: context.coresApp.roxoPrimario,
+                                            ),
+                                          )
+                                        else
+                                          Expanded(
+                                            child: Container(
+                                              height: 72,
+                                              alignment: Alignment.center,
+                                              padding: const EdgeInsets.symmetric(horizontal: 14),
+                                              decoration: BoxDecoration(
+                                                color: context.coresApp.verdeLido.withValues(alpha: 0.10),
+                                                borderRadius: BorderRadius.circular(18),
+                                                border: Border.all(
+                                                  color: context.coresApp.verdeLido.withValues(alpha: 0.30),
+                                                  width: 1,
+                                                ),
+                                              ),
+                                              child: Row(
+                                                mainAxisAlignment: MainAxisAlignment.center,
+                                                children: [
+                                                  Icon(Icons.celebration_rounded, color: context.coresApp.verdeLido, size: 20),
+                                                  const SizedBox(width: 8),
+                                                  Text(
+                                                    'Leitura finalizada',
+                                                    style: TextStyle(
+                                                      color: context.coresApp.verdeLido,
+                                                      fontWeight: FontWeight.w900,
+                                                      fontSize: 13,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 18),
+                                    _LinhaDoTempoDatas(
+                                      status: _statusLeitura,
+                                      dataInicio: _dataInicio,
+                                      dataConclusao: _dataConclusao,
+                                      aoSelecionarInicio: _selecionarDataInicio,
+                                      aoLimparInicio: () => setState(() => _dataInicio = null),
+                                      aoSelecionarConclusao: _selecionarData,
+                                      aoLimparConclusao: () => setState(() => _dataConclusao = null),
+                                      tema: Theme.of(context),
+                                      cores: context.coresApp,
+                                    ),
+                                  ],
+                                ),
                               ),
                             ],
                           ],
@@ -1051,6 +1362,277 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _CampoNumerico extends StatelessWidget {
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+  final IconData icone;
+  final String label;
+  final String hint;
+  final Color iconeCor;
+  const _CampoNumerico({
+    required this.controller,
+    required this.onChanged,
+    required this.icone,
+    required this.label,
+    required this.hint,
+    required this.iconeCor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final tema = Theme.of(context);
+    final cores = tema.extension<AppCores>() ?? AppCores.claro;
+    return Container(
+      height: 72,
+      decoration: BoxDecoration(
+        color: cores.roxoFundoChip.withValues(alpha: tema.brightness == Brightness.dark ? 0.25 : 0.55),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: cores.separador, width: 0.6),
+      ),
+      child: TextField(
+        controller: controller,
+        onChanged: onChanged,
+        keyboardType: TextInputType.number,
+        style: tema.textTheme.titleSmall?.copyWith(
+              color: cores.textoForte,
+              fontWeight: FontWeight.w800,
+            ),
+        decoration: InputDecoration(
+          contentPadding: EdgeInsets.zero,
+          border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
+          errorBorder: InputBorder.none,
+          disabledBorder: InputBorder.none,
+          prefixIcon: Padding(
+            padding: const EdgeInsets.only(left: 14, right: 8),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 36, height: 36,
+                  decoration: BoxDecoration(
+                    color: iconeCor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                  child: Icon(icone, color: iconeCor, size: 18),
+                ),
+              ],
+            ),
+          ),
+          labelText: label,
+          labelStyle: tema.textTheme.bodySmall?.copyWith(
+                color: cores.textoMedio,
+                fontWeight: FontWeight.w600,
+                height: 0,
+              ),
+          floatingLabelAlignment: FloatingLabelAlignment.start,
+          floatingLabelStyle: TextStyle(
+                color: iconeCor,
+                fontWeight: FontWeight.w800,
+                fontSize: 11,
+              ),
+          alignLabelWithHint: true,
+          hintText: hint,
+          hintStyle: tema.textTheme.labelLarge?.copyWith(
+                color: cores.textoFraco,
+                fontWeight: FontWeight.w500,
+              ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LinhaDoTempoDatas extends StatelessWidget {
+  final String status;
+  final DateTime? dataInicio;
+  final DateTime? dataConclusao;
+  final VoidCallback aoSelecionarInicio;
+  final VoidCallback aoLimparInicio;
+  final VoidCallback aoSelecionarConclusao;
+  final VoidCallback aoLimparConclusao;
+  final ThemeData tema;
+  final AppCores cores;
+
+  const _LinhaDoTempoDatas({
+    required this.status,
+    required this.dataInicio,
+    required this.dataConclusao,
+    required this.aoSelecionarInicio,
+    required this.aoLimparInicio,
+    required this.aoSelecionarConclusao,
+    required this.aoLimparConclusao,
+    required this.tema,
+    required this.cores,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final showConclusao = status == 'LIDO';
+    return Column(
+      children: [
+        _ItemLinhaTempo(
+          bolinhaCor: cores.roxoPrimario,
+          bolinhaIcone: Icons.play_arrow_rounded,
+          label: 'Data de início',
+          data: dataInicio,
+          onSelecionar: aoSelecionarInicio,
+          onLimpar: aoLimparInicio,
+          tema: tema,
+          cores: cores,
+          hint: 'Quando você começou a ler?',
+        ),
+        if (showConclusao) ...[
+          Padding(
+            padding: const EdgeInsets.only(left: 17),
+            child: SizedBox(
+              height: 14,
+              child: LayoutBuilder(
+                builder: (_, c) {
+                  return Row(
+                    children: List.generate(10, (i) =>
+                        Expanded(
+                          child: Container(
+                            color: (i.isEven) ? cores.roxoPrimario.withValues(alpha: 0.35) : Colors.transparent,
+                          ),
+                        ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+          _ItemLinhaTempo(
+            bolinhaCor: cores.verdeLido,
+            bolinhaIcone: Icons.flag_rounded,
+            label: 'Data de conclusão',
+            data: dataConclusao,
+            onSelecionar: aoSelecionarConclusao,
+            onLimpar: aoLimparConclusao,
+            tema: tema,
+            cores: cores,
+            hint: 'Quando finalizou a leitura?',
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _ItemLinhaTempo extends StatelessWidget {
+  final Color bolinhaCor;
+  final IconData bolinhaIcone;
+  final String label;
+  final DateTime? data;
+  final VoidCallback onSelecionar;
+  final VoidCallback onLimpar;
+  final ThemeData tema;
+  final AppCores cores;
+  final String hint;
+
+  const _ItemLinhaTempo({
+    required this.bolinhaCor,
+    required this.bolinhaIcone,
+    required this.label,
+    required this.data,
+    required this.onSelecionar,
+    required this.onLimpar,
+    required this.tema,
+    required this.cores,
+    required this.hint,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Column(
+          children: [
+            Container(
+              width: 34, height: 34,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: bolinhaCor,
+                boxShadow: [
+                  BoxShadow(
+                    color: bolinhaCor.withValues(alpha: 0.3),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Icon(bolinhaIcone, color: Colors.white, size: 17),
+            ),
+          ],
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: GestureDetector(
+            onTap: onSelecionar,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: Theme.of(context).cardColor.withValues(alpha: 0.75),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: data != null ? bolinhaCor.withValues(alpha: 0.38) : cores.separador,
+                  width: 0.8,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          label,
+                          style: tema.textTheme.bodySmall?.copyWith(
+                                color: cores.textoMedio,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 11,
+                                letterSpacing: 0.2,
+                              ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          data != null ? formatarData(data) : hint,
+                          style: tema.textTheme.bodyMedium?.copyWith(
+                                color: data != null ? cores.textoForte : cores.textoFraco,
+                                fontWeight: FontWeight.w700,
+                                height: 1.2,
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  if (data != null)
+                    GestureDetector(
+                      onTap: () => onLimpar(),
+                      child: Container(
+                        width: 28, height: 28,
+                        decoration: BoxDecoration(
+                          color: cores.textoFraco.withValues(alpha: 0.10),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(Icons.close_rounded, size: 15, color: cores.textoMedio),
+                      ),
+                    )
+                  else
+                    Icon(Icons.chevron_right_rounded, color: cores.textoFraco, size: 20),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

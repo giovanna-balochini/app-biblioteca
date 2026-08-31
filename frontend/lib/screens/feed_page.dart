@@ -11,6 +11,7 @@ import 'package:frontend/widgets/empty_state.dart';
 import 'package:frontend/utils/formatters.dart';
 import 'package:frontend/utils/transitions.dart';
 import 'package:frontend/widgets/skeletons.dart';
+import 'package:frontend/widgets/recomendacoes_para_voce.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:typed_data';
 
@@ -395,6 +396,9 @@ class _FeedPageState extends State<FeedPage> with AutomaticKeepAliveClientMixin 
                 ],
               ),
             ),
+          ),
+          const SliverToBoxAdapter(
+            child: RecomendacoesParaVoce(),
           ),
           if (_carregando)
             const SliverToBoxAdapter(

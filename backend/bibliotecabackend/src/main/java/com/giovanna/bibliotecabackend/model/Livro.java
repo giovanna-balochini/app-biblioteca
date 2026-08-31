@@ -27,6 +27,9 @@ public class Livro {
     @Column(name = "lido_legado")
     private boolean lido;
 
+    @Column(name = "lido")
+    private boolean lidoOriginal = false;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status_leitura", length = 20)
     private StatusLeitura statusLeitura;
