@@ -68,6 +68,41 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
       if (pagAtual != null) {
         _paginaAtualController.text = pagAtual.toString();
       }
+      final st = inicial['statusLeitura']?.toString().toUpperCase();
+      if (st != null && (st == 'QUERO_LER' || st == 'LENDO' || st == 'LIDO')) {
+        _statusLeitura = st;
+        _lido = st == 'LIDO';
+      } else {
+        final lidoCampo = inicial['lido'];
+        if (lidoCampo is bool && lidoCampo) {
+          _statusLeitura = 'LIDO';
+          _lido = true;
+        }
+      }
+      final dIni = inicial['dataInicioLeitura']?.toString();
+      if (dIni != null && dIni.trim().isNotEmpty) {
+        final di = DateTime.tryParse(dIni.replaceAll('/', '-'));
+        if (di != null) {
+          _dataInicio = di;
+        } else {
+          final partes = dIni.split('/');
+          if (partes.length == 3) {
+            _dataInicio = DateTime(int.parse(partes[2]), int.parse(partes[1]), int.parse(partes[0]));
+          }
+        }
+      }
+      final dFim = inicial['dataFimLeitura']?.toString() ?? inicial['dataConclusao']?.toString();
+      if (dFim != null && dFim.trim().isNotEmpty) {
+        final df = DateTime.tryParse(dFim.replaceAll('/', '-'));
+        if (df != null) {
+          _dataConclusao = df;
+        } else {
+          final partes = dFim.split('/');
+          if (partes.length == 3) {
+            _dataConclusao = DateTime(int.parse(partes[2]), int.parse(partes[1]), int.parse(partes[0]));
+          }
+        }
+      }
     }
   }
 
@@ -502,12 +537,10 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
     required String status,
     required IconData icone,
     required String rotulo,
-    required double largura,
     required ({Color fundo, Color fundoClaro, Color texto, Color iconeCor}) cores,
   }) {
     final selecionado = _statusLeitura == status;
-    return SizedBox(
-      width: largura,
+    return Expanded(
       child: GestureDetector(
         onTap: () {
           setState(() {
@@ -843,95 +876,7 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
                           }
                         },
                       ),
-                      const SizedBox(height: 24),
-                      GestureDetector(
-                        onTap: () => setState(() => _lido = !_lido),
-                        child: Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                          decoration: BoxDecoration(
-                            color: _lido ? const Color(0xFFE8FAF0) : const Color(0xFFF8F5FF),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                              color: _lido ? const Color(0xFF4CAF50) : Colors.transparent,
-                              width: 1.2,
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                _lido ? Icons.check_circle : Icons.menu_book_outlined,
-                                color: _lido ? const Color(0xFF2E7D32) : const Color(0xFF7C4DFF),
-                                size: 26,
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    _lido
-                                        ? Text(
-                                            'Livro lido',
-                                            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                                  fontWeight: FontWeight.w600,
-                                                  color: const Color(0xFF2E7D32),
-                                                ),
-                                          )
-                                        : ShaderMask(
-                                            shaderCallback: (bounds) => const LinearGradient(
-                                              colors: [Color(0xFF7C4DFF), Color(0xFFB28CFF)],
-                                              begin: Alignment.topLeft,
-                                              end: Alignment.bottomRight,
-                                            ).createShader(bounds),
-                                            blendMode: BlendMode.srcIn,
-                                            child: Text(
-                                              'Ainda não lido',
-                                              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                                    fontWeight: FontWeight.w700,
-                                                    fontSize: 17,
-                                                    color: Colors.white,
-                                                  ),
-                                            ),
-                                          ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      'Clique para marcar como lido.',
-                                      style: Theme.of(context).textTheme.bodyMedium,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Switch(
-                                value: _lido,
-                                onChanged: (valor) => setState(() => _lido = valor),
-                                activeThumbColor: const Color(0xFF4CAF50),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
                       const SizedBox(height: 16),
-                      if (_lido) ...[
-                        TextFormField(
-                          readOnly: true,
-                          controller: TextEditingController(text: formatarData(_dataConclusao)),
-                          onTap: _selecionarData,
-                          decoration: InputDecoration(
-                            labelText: 'Data de conclusão da leitura',
-                            prefixIcon: const Icon(Icons.calendar_today_rounded, color: Color(0xFF7C4DFF)),
-                            suffixIcon: _dataConclusao != null
-                                ? IconButton(
-                                    icon: const Icon(Icons.close, color: Color(0xFF7C4DFF)),
-                                    onPressed: () => setState(() => _dataConclusao = null),
-                                    tooltip: 'Limpar data',
-                                  )
-                                : null,
-                            hintText: 'Clique para selecionar',
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                      ],
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.fromLTRB(16, 18, 16, 20),
@@ -1003,52 +948,44 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
                               ],
                             ),
                             const SizedBox(height: 18),
-                            LayoutBuilder(
-                              builder: (_, constraints) {
-                                final larguraBotao = (constraints.maxWidth - 16) / 3;
-                                return Row(
-                                  children: [
-                                    _botaoStatusNovo(
-                                      status: 'QUERO_LER',
-                                      icone: Icons.bookmark_border_rounded,
-                                      rotulo: 'Quero ler',
-                                      largura: larguraBotao,
-                                      cores: (
-                                        fundo: const Color(0xFF6B7280),
-                                        fundoClaro: const Color(0xFF9CA3AF),
-                                        texto: Colors.white,
-                                        iconeCor: Colors.white,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    _botaoStatusNovo(
-                                      status: 'LENDO',
-                                      icone: Icons.menu_book_rounded,
-                                      rotulo: 'Lendo',
-                                      largura: larguraBotao,
-                                      cores: (
-                                        fundo: context.coresApp.roxoPrimario,
-                                        fundoClaro: context.coresApp.roxoClaro,
-                                        texto: Colors.white,
-                                        iconeCor: Colors.white,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    _botaoStatusNovo(
-                                      status: 'LIDO',
-                                      icone: Icons.verified_rounded,
-                                      rotulo: 'Lido',
-                                      largura: larguraBotao,
-                                      cores: (
-                                        fundo: context.coresApp.verdeLido,
-                                        fundoClaro: const Color(0xFF66BB6A),
-                                        texto: Colors.white,
-                                        iconeCor: Colors.white,
-                                      ),
-                                    ),
-                                  ],
-                                );
-                              },
+                            Row(
+                              children: [
+                                _botaoStatusNovo(
+                                  status: 'QUERO_LER',
+                                  icone: Icons.bookmark_border_rounded,
+                                  rotulo: 'Quero ler',
+                                  cores: (
+                                    fundo: const Color(0xFF6B7280),
+                                    fundoClaro: const Color(0xFF9CA3AF),
+                                    texto: Colors.white,
+                                    iconeCor: Colors.white,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                _botaoStatusNovo(
+                                  status: 'LENDO',
+                                  icone: Icons.menu_book_rounded,
+                                  rotulo: 'Lendo',
+                                  cores: (
+                                    fundo: context.coresApp.roxoPrimario,
+                                    fundoClaro: context.coresApp.roxoClaro,
+                                    texto: Colors.white,
+                                    iconeCor: Colors.white,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                _botaoStatusNovo(
+                                  status: 'LIDO',
+                                  icone: Icons.verified_rounded,
+                                  rotulo: 'Lido',
+                                  cores: (
+                                    fundo: context.coresApp.verdeLido,
+                                    fundoClaro: const Color(0xFF66BB6A),
+                                    texto: Colors.white,
+                                    iconeCor: Colors.white,
+                                  ),
+                                ),
+                              ],
                             ),
                             if (_statusLeitura == 'QUERO_LER') ...[
                               const SizedBox(height: 18),
@@ -1165,19 +1102,6 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
                                                     valueColor: AlwaysStoppedAnimation<Color>(corBarra),
                                                   ),
                                                 ),
-                                                if (pct != null && pct >= 15)
-                                                  Positioned.fill(
-                                                    child: Align(
-                                                      alignment: Alignment.centerLeft,
-                                                      child: Padding(
-                                                        padding: EdgeInsets.only(
-                                                          left: MediaQuery.of(context).size.width *
-                                                              0.01 + ((pct.clamp(15, 92) / 100) * 260).clamp(10, 260) * 0,
-                                                        ),
-                                                        child: SizedBox.shrink(),
-                                                      ),
-                                                    ),
-                                                  ),
                                               ],
                                             ),
                                           ],
@@ -1185,63 +1109,79 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
                                       },
                                     ),
                                     const SizedBox(height: 16),
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: _CampoNumerico(
-                                            controller: _totalPaginasController,
-                                            onChanged: (v) => setState(() {}),
-                                            icone: Icons.book_rounded,
-                                            label: 'Total de páginas',
-                                            hint: '280',
-                                            iconeCor: context.coresApp.roxoPrimario,
+                                    if (_statusLeitura == 'LIDO') ...[
+                                      _CampoNumerico(
+                                        controller: _totalPaginasController,
+                                        onChanged: (v) => setState(() {}),
+                                        icone: Icons.book_rounded,
+                                        label: 'Total de páginas',
+                                        hint: '280',
+                                        iconeCor: context.coresApp.roxoPrimario,
+                                      ),
+                                      const SizedBox(height: 10),
+                                      Container(
+                                        height: 60,
+                                        width: double.infinity,
+                                        alignment: Alignment.center,
+                                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                                        decoration: BoxDecoration(
+                                          color: context.coresApp.verdeLido.withValues(alpha: 0.10),
+                                          borderRadius: BorderRadius.circular(18),
+                                          border: Border.all(
+                                            color: context.coresApp.verdeLido.withValues(alpha: 0.30),
+                                            width: 1,
                                           ),
                                         ),
-                                        const SizedBox(width: 12),
-                                        if (_statusLeitura != 'LIDO')
+                                        child: FittedBox(
+                                          fit: BoxFit.scaleDown,
+                                          alignment: Alignment.centerLeft,
+                                          child: Row(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(Icons.celebration_rounded, color: context.coresApp.verdeLido, size: 20),
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                'Leitura finalizada com sucesso',
+                                                maxLines: 1,
+                                                style: TextStyle(
+                                                  color: context.coresApp.verdeLido,
+                                                  fontWeight: FontWeight.w900,
+                                                  fontSize: 14,
+                                                  letterSpacing: 0.1,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ] else ...[
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: _CampoNumerico(
+                                              controller: _totalPaginasController,
+                                              onChanged: (v) => setState(() {}),
+                                              icone: Icons.book_rounded,
+                                              label: 'Total páginas',
+                                              hint: '280',
+                                              iconeCor: context.coresApp.roxoPrimario,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 10),
                                           Expanded(
                                             child: _CampoNumerico(
                                               controller: _paginaAtualController,
                                               onChanged: (v) => setState(() {}),
                                               icone: Icons.label_important_rounded,
-                                              label: 'Página atual',
+                                              label: 'Pág. atual',
                                               hint: '47',
                                               iconeCor: context.coresApp.roxoPrimario,
                                             ),
-                                          )
-                                        else
-                                          Expanded(
-                                            child: Container(
-                                              height: 72,
-                                              alignment: Alignment.center,
-                                              padding: const EdgeInsets.symmetric(horizontal: 14),
-                                              decoration: BoxDecoration(
-                                                color: context.coresApp.verdeLido.withValues(alpha: 0.10),
-                                                borderRadius: BorderRadius.circular(18),
-                                                border: Border.all(
-                                                  color: context.coresApp.verdeLido.withValues(alpha: 0.30),
-                                                  width: 1,
-                                                ),
-                                              ),
-                                              child: Row(
-                                                mainAxisAlignment: MainAxisAlignment.center,
-                                                children: [
-                                                  Icon(Icons.celebration_rounded, color: context.coresApp.verdeLido, size: 20),
-                                                  const SizedBox(width: 8),
-                                                  Text(
-                                                    'Leitura finalizada',
-                                                    style: TextStyle(
-                                                      color: context.coresApp.verdeLido,
-                                                      fontWeight: FontWeight.w900,
-                                                      fontSize: 13,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
                                           ),
-                                      ],
-                                    ),
+                                        ],
+                                      ),
+                                    ],
                                     const SizedBox(height: 18),
                                     _LinhaDoTempoDatas(
                                       status: _statusLeitura,
@@ -1400,47 +1340,53 @@ class _CampoNumerico extends StatelessWidget {
         style: tema.textTheme.titleSmall?.copyWith(
               color: cores.textoForte,
               fontWeight: FontWeight.w800,
+              fontSize: 15,
             ),
         decoration: InputDecoration(
-          contentPadding: EdgeInsets.zero,
+          contentPadding: const EdgeInsets.only(left: 4, right: 6, top: 4, bottom: 4),
+          isDense: true,
           border: InputBorder.none,
           enabledBorder: InputBorder.none,
           focusedBorder: InputBorder.none,
           errorBorder: InputBorder.none,
           disabledBorder: InputBorder.none,
           prefixIcon: Padding(
-            padding: const EdgeInsets.only(left: 14, right: 8),
+            padding: const EdgeInsets.only(left: 10, right: 6),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Container(
-                  width: 36, height: 36,
+                  width: 32, height: 32,
                   decoration: BoxDecoration(
                     color: iconeCor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(11),
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Icon(icone, color: iconeCor, size: 18),
+                  child: Icon(icone, color: iconeCor, size: 16),
                 ),
               ],
             ),
           ),
+          prefixIconConstraints: const BoxConstraints(minWidth: 48, minHeight: 40),
           labelText: label,
-          labelStyle: tema.textTheme.bodySmall?.copyWith(
+          labelStyle: tema.textTheme.labelLarge?.copyWith(
                 color: cores.textoMedio,
-                fontWeight: FontWeight.w600,
-                height: 0,
+                fontWeight: FontWeight.w700,
+                fontSize: 11,
+                height: 1,
               ),
           floatingLabelAlignment: FloatingLabelAlignment.start,
           floatingLabelStyle: TextStyle(
                 color: iconeCor,
                 fontWeight: FontWeight.w800,
-                fontSize: 11,
+                fontSize: 10,
+                height: 0.6,
               ),
           alignLabelWithHint: true,
           hintText: hint,
           hintStyle: tema.textTheme.labelLarge?.copyWith(
                 color: cores.textoFraco,
-                fontWeight: FontWeight.w500,
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
               ),
         ),
       ),
