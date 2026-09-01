@@ -46,6 +46,15 @@ public class Livro {
     @Column(name = "data_fim_leitura")
     private LocalDate dataFimLeitura;
 
+    @Column(name = "avaliacao")
+    private Integer avaliacao;
+
+    @Column(name = "comentario_avaliacao", length = 500)
+    private String comentarioAvaliacao;
+
+    @Column(name = "data_avaliacao")
+    private LocalDate dataAvaliacao;
+
     @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "usuario_id")

@@ -79,6 +79,22 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
           _lido = true;
         }
       }
+      final aval = inicial['avaliacao'];
+      if (aval != null) {
+        int? nota;
+        if (aval is int) {
+          nota = aval;
+        } else if (aval is double) {
+          nota = aval.toInt();
+        } else if (aval is num) {
+          nota = aval.toInt();
+        } else {
+          nota = int.tryParse(aval.toString());
+        }
+        if (nota != null && nota >= 1 && nota <= 5) {
+          _avaliacao = nota;
+        }
+      }
       final dIni = inicial['dataInicioLeitura']?.toString();
       if (dIni != null && dIni.trim().isNotEmpty) {
         final di = DateTime.tryParse(dIni.replaceAll('/', '-'));
@@ -390,6 +406,9 @@ class _CadastroLivroPageState extends State<CadastroLivroPage> {
       'imagem': imagemParaSalvar,
       'lido': _lido,
       'statusLeitura': _statusLeitura,
+      if (avaliacaoParaEnviar != null) 'avaliacao': avaliacaoParaEnviar,
+      if (avaliacaoParaEnviar != null) 'comentarioAvaliacao': null,
+      if (dataParaEnviar != null) 'dataAvaliacao': dataParaEnviar,
       if (totalPaginas != null) 'totalPaginas': totalPaginas,
       if (paginaAtual != null) 'paginaAtual': paginaAtual,
       if (_dataInicio != null) 'dataInicioLeitura': formatarDataISO(_dataInicio),
